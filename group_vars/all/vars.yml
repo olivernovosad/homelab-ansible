@@ -1,0 +1,9 @@
+---
+system_update_reboot_if_needed: false
+# Globálne DevOps premenné pre celý server
+base_docker_path: "/opt/docker"
+appdata_path: "{{ base_docker_path }}/app-data"
+# Globálne nastavenia
+timezone: "Europe/Bratislava"
+# Tu neskôr zadefinujeme aj cesty k filmom/seriálom na disku
+# media_movies_path: "/mnt/storage/movies"

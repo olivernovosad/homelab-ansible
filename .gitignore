@@ -1,0 +1,9 @@
+# Ansible temp & cache files
+.ansible/
+*.retry
+*.pyc
+
+# Legacy local secrets (just in case)
+.vault_pass
+vault_password.txt
+.vault_pass.sh

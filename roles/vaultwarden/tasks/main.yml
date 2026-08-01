@@ -1,0 +1,34 @@
+---
+# ===========================================================================
+# 1. PRÍPRAVA ADRESÁRA A DOCKER SIETE
+# ===========================================================================
+- name: Vytvor adresár pre dáta Vaultwarden
+  ansible.builtin.file:
+    path: /opt/docker/app-data/vaultwarden
+    state: directory
+    mode: '0755'
+
+- name: Uisti sa, že Docker sieť tunnel_net existuje
+  community.docker.docker_network:
+    name: tunnel_net
+    state: present
+
+# ===========================================================================
+# 2. PASSWORD MANAGER - Vaultwarden
+# ===========================================================================
+- name: Spusti Vaultwarden kontajner
+  community.docker.docker_container:
+    name: vaultwarden
+    image: vaultwarden/server:latest
+    state: started
+    restart_policy: unless-stopped
+    init: true
+    published_ports:
+      - "127.0.0.1:8880:80"
+    env:
+      WEBSOCKET_ENABLED: "true"
+      SIGNUPS_ALLOWED: "false"
+    volumes:
+      - /opt/docker/app-data/vaultwarden:/data
+    networks:
+      - name: tunnel_net

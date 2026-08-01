@@ -1,0 +1,13 @@
+---
+- name: Kompletná správa Gaia Homelabu
+  hosts: all
+  become: true
+
+  roles:
+    - system           # Watchtower, Crowdsec, Autoheal
+    - connection      # Nginx Proxy Manager, Cloudflared
+    - vaultwarden      # Heslá
+    - nextcloud        # Nextcloud AIO
+    - media            # Jellyfin, Torrenty, Gluetun, atd.
+    - monitoring       # Grafana, Prometheus
+    - foundry          # Foundry VTT
