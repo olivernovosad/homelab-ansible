@@ -1,0 +1,6 @@
+---
+npm_image: "jc21/nginx-proxy-manager:latest"
+cloudflared_image: "cloudflare/cloudflared:latest"
+
+# Prepojenie na zašifrovaný token z Vaultu
+cloudflare_tunnel_token: "{{ vault_cloudflare_tunnel_token }}"

@@ -1,0 +1,98 @@
+---
+# ===========================================================================
+# 1. ZÁKLADNÉ BALÍKY A QEMU GUEST AGENT
+# ===========================================================================
+- name: Aktualizácia cache a inštalácia základných systémových balíkov
+  ansible.builtin.apt:
+    name: "{{ base_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Uistenie sa, že QEMU Guest Agent beží
+  ansible.builtin.systemd:
+    name: qemu-guest-agent
+    state: started
+    enabled: true
+
+# ===========================================================================
+# 2. DOCKER A SKUPINY
+# ===========================================================================
+- name: Inštalácia Dockeru a Compose pluginu
+  ansible.builtin.apt:
+    name:
+      - docker.io
+      - docker-compose-v2
+    state: present
+
+- name: Pridanie spravovaného používateľa do skupiny docker
+  ansible.builtin.user:
+    name: "{{ ansible_user }}"
+    groups: docker
+    append: true
+
+# ===========================================================================
+# 3. SSH HARDENING
+# ===========================================================================
+- name: Aplikácia bezpečnej SSH konfigurácie (Drop-in file)
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/99-hardening.conf
+    content: |
+      PermitRootLogin no
+      PasswordAuthentication no
+      MaxAuthTries 3
+      X11Forwarding no
+      AllowTcpForwarding yes
+    mode: '0600'
+  notify: Restart SSH
+
+# ===========================================================================
+# 4. UFW FIREWALL CONFIGURATION
+# ===========================================================================
+- name: Nastavenie základnej UFW politiky (deny incoming)
+  community.general.ufw:
+    policy: deny
+    direction: incoming
+
+- name: Povolenie SSH portu pre spravované siete (LAN + Libvirt KVM)
+  community.general.ufw:
+    rule: allow
+    src: "{{ item }}"
+    port: '22'
+    proto: tcp
+  loop:
+    - "{{ lan_subnet }}"
+    - "192.168.122.0/24" # Libvirt Subnet (Staging)
+
+- name: Povolenie HTTP a HTTPS pre testovacie webové služby
+  community.general.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop:
+    - '80'
+    - '443'
+
+- name: Povolenie komunikácie pre Docker siete
+  community.general.ufw:
+    rule: allow
+    src: "{{ docker_subnet }}"
+
+- name: Aktivácia UFW Firewallu
+  community.general.ufw:
+    state: enabled
+
+# ===========================================================================
+# 5. KERNEL HARDENING (SYSCTL)
+# ===========================================================================
+- name: Konfigurácia sysctl pre sieťovú bezpečnosť a Docker
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: true
+  loop:
+    - { key: 'net.ipv4.tcp_syncookies', value: '1' }
+    - { key: 'net.ipv4.conf.all.accept_redirects', value: '0' }
+    - { key: 'net.ipv4.conf.all.send_redirects', value: '0' }
+    - { key: 'net.ipv4.ip_forward', value: '1' }

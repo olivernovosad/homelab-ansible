@@ -1,0 +1,14 @@
+---
+# Configuration for ansible-lint
+profile: production
+
+# Ignorované cesty pri kontrole
+exclude_paths:
+  - .github/
+  - inventories/
+
+# Pravidlá, ktoré chceme ignorovať (ak by spôsobovali false-positives)
+skip_list:
+  - yaml[comments]  # Neukazuj chyby pre chýbajúce komentáre v YAML
+  - fqcn[action-core] # Ak niekde vynecháš ansible.builtin. prefix
+  - var-naming        # Povoľuje globálne názvy premenných v defaults/

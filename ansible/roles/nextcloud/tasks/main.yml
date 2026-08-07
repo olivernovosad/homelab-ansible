@@ -1,0 +1,42 @@
+---
+- name: Uisti sa, že existuje dátový adresár na SSD pre Nextcloud
+  ansible.builtin.file:
+    path: "{{ storage_ssd_path | default('/mnt/ssd') }}/nextcloud-data"
+    state: directory
+    owner: "33"
+    group: "33"
+    mode: '0770'
+
+- name: Uisti sa, že Docker volume pre AIO mastercontainer existuje
+  community.docker.docker_volume:
+    name: nextcloud_aio_mastercontainer
+    state: present
+
+- name: Spusti Nextcloud AIO Mastercontainer
+  community.docker.docker_container:
+    name: nextcloud-aio-mastercontainer
+    image: nextcloud/all-in-one:latest
+    state: started
+    restart_policy: always
+    init: true
+    ports:
+      - "8443:8080"
+    volumes:
+      - "nextcloud_aio_mastercontainer:/mnt/docker-aio-config"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    env:
+      SKIP_DOMAIN_VALIDATION: "true"
+      APACHE_PORT: "11000"
+      NEXTCLOUD_ADDITIONAL_APACHE_CONTAINER_NETWORKS: "proxy_net"
+      APACHE_IP_BINDING: "0.0.0.0"
+      NEXTCLOUD_DATADIR: "{{ storage_ssd_path | default('/mnt/ssd') }}/nextcloud-data"
+    networks:
+      - name: proxy_net
+
+- name: Poistka - Pripoj Apache do proxy_net (ak uz existuje)
+  community.docker.docker_network:
+    name: proxy_net
+    connected:
+      - nextcloud-aio-apache
+    appends: true
+  failed_when: false

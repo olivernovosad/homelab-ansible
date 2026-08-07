@@ -1,0 +1,37 @@
+---
+- name: Uisti sa, že externé siete existujú
+  community.docker.docker_network:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - proxy_net
+    - tunnel_net
+
+- name: Spusti Nginx Proxy Manager (npm)
+  community.docker.docker_container:
+    name: npm
+    image: "{{ npm_image }}"
+    state: started
+    restart_policy: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "127.0.0.1:81:81"
+    volumes:
+      - "{{ appdata_path }}/npm:/data"
+      - "{{ appdata_path }}/npm/letsencrypt:/etc/letsencrypt"
+    networks:
+      - name: proxy_net
+
+- name: Spusti Cloudflare Tunnel (cloudflared)
+  community.docker.docker_container:
+    name: cloudflared
+    image: "{{ cloudflared_image }}"
+    state: started
+    init: true
+    restart_policy: unless-stopped
+    env:
+      TUNNEL_TOKEN: "{{ cloudflare_tunnel_token }}"
+    command: "tunnel --no-autoupdate run"
+    networks:
+      - name: tunnel_net

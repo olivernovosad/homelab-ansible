@@ -1,0 +1,10 @@
+---
+ansible_user: sysadmin
+node_env: staging
+
+# Diskové cesty pre staging (ak napr. v staginigu nemáš druhý HDD, namapujeme to do dočasných zložiek)
+storage_ssd_path: "/mnt/ssd"
+storage_hdd_path: "/mnt/hdd8T"
+
+# Na staginigu nemusia byť fyzické disky prítomné
+mount_physical_disks: false

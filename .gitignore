@@ -1,9 +1,16 @@
-# Ansible temp & cache files
-.ansible/
-*.retry
-*.pyc
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
 
-# Legacy local secrets (just in case)
-.vault_pass
-vault_password.txt
-.vault_pass.sh
+# Ansible
+**/.*vault_pass*
+**/*.retry
+
+# OS & Editors
+.DS_Store
+.idea/
+.vscode/
+*.swp
