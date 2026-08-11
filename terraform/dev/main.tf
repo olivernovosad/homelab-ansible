@@ -77,3 +77,11 @@ resource "libvirt_domain" "staging_node" {
 output "staging_ip" {
   value = libvirt_domain.staging_node.network_interface[0].addresses
 }
+
+resource "local_file" "ansible_inventory" {
+  content  = <<-EOT
+    [staging]
+    staging-vm ansible_host=${libvirt_domain.staging_node.network_interface[0].addresses[0]} ansible_user=ubuntu
+  EOT
+  filename = "${path.module}/../../ansible/inventories/dev.ini"
+}
