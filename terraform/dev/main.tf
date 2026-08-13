@@ -14,8 +14,10 @@ provider "libvirt" {
 resource "libvirt_volume" "ubuntu_base" {
   name   = "ubuntu-24.04-base.qcow2"
   pool   = "default"
-  source = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
   format = "qcow2"
+  
+  # Namiesto /current/ používame presný statický release.
+  source = "https://cloud-images.ubuntu.com/releases/24.04/release-20240423/ubuntu-24.04-server-cloudimg-amd64.img"
 }
 
 resource "libvirt_volume" "staging_disk" {

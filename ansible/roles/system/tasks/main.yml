@@ -63,8 +63,9 @@
     env:
       KOPIA_PASSWORD: "{{ vault_kopia_password }}"
     entrypoint: ["/bin/sh", "-c"]
+   # Insecure je akceptovatelne kvoli lokalnemu behu. Nieje vystavene internetu a teda nema cert
     command: >
-      "exec kopia server start --insecure --address=0.0.0.0:51515 --disable-csrf-token-checks --server-username=admin --server-password=$KOPIA_PASSWORD"
+      "exec kopia server start --insecure --address=0.0.0.0:51515 --server-username=admin --server-password=$KOPIA_PASSWORD"
     volumes:
       - "{{ appdata_path }}:/app-data:ro"
       - /opt/docker/compose-stacks:/stacks:ro
