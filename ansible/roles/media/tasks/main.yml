@@ -65,10 +65,12 @@
     volumes:
       - "{{ appdata_path }}/gluetun:/gluetun"
     healthcheck:
-      test: ["CMD-SHELL", "if [ \"$(wget -qO- http://ifconfig.me)\" = \"{{ vault_home_public_ip }}\" ]; then exit 1; else exit 0; fi"]
+      # Pýtame sa priamo lokálneho Gluetun API vo vnútri kontajnera
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8000/v1/publicip/ip || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 15s
     networks:
       - name: torrent_net
 

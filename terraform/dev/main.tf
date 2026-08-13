@@ -82,6 +82,10 @@ resource "local_file" "ansible_inventory" {
   content  = <<-EOT
     [staging]
     staging-vm ansible_host=${libvirt_domain.staging_node.network_interface[0].addresses[0]} ansible_user=ubuntu
+
+    [staging:vars]
+    # Vypne kontrolu kľúčov IBA pre dočasnú testovaciu VM v KVM
+    ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
   EOT
   filename = "${path.module}/../../ansible/inventories/dev.ini"
 }
