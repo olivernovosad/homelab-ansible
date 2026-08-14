@@ -66,7 +66,7 @@
       - "{{ appdata_path }}/gluetun:/gluetun"
     healthcheck:
       # Pýtame sa priamo lokálneho Gluetun API vo vnútri kontajnera
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8000/v1/publicip/ip || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:9999 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

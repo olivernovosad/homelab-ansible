@@ -14,10 +14,20 @@
     name: qemu-guest-agent
     state: started
     enabled: true
-
+  when: ansible_virtualization_role == 'guest'
 # ===========================================================================
 # 2. DOCKER A SKUPINY
 # ===========================================================================
+- name: Odstránenie prípadných konfliktných Docker CE balíkov
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - docker-compose-plugin
+      - containerd.io
+    state: absent
+    purge: true
+
 - name: Inštalácia Dockeru a Compose pluginu
   ansible.builtin.apt:
     name:

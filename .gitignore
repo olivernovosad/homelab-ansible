@@ -1,16 +1,50 @@
-# Terraform
-**/.terraform/
+# ==========================================
+# 1. OS & Editor Junk
+# ==========================================
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# ==========================================
+# 2. Local Dumps, Logs & Temp
+# ==========================================
+kompletny_kod.txt
+*.log
+*.tmp
+
+# ==========================================
+# 3. Ansible & Secrets
+# ==========================================
+*.retry
+.vault_pass*
+*.vault_password
+ansible/get-vault-pass.sh
+.ansible/
+__pycache__/
+
+# ==========================================
+# 4. Terraform
+# ==========================================
+# State files
 *.tfstate
 *.tfstate.*
+*.tfstate.backup
+
+# Crash logs & CLI config
+crash.log
+crash.*.log
+.terraformrc
+terraform.rc
+
+# Downloaded providers & modules
+.terraform/
+**/.terraform/
+
+# Sensitive variable files
 *.tfvars
 *.tfvars.json
-
-# Ansible
-**/.*vault_pass*
-**/*.retry
-
-# OS & Editors
-.DS_Store
-.idea/
-.vscode/
-*.swp
+!*.example.tfvars
