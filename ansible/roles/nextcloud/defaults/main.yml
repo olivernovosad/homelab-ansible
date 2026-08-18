@@ -1,0 +1,40 @@
+---
+# --- PATHS & CONTAINER CONFIG ---
+nextcloud_dir: "/opt/nextcloud"
+nextcloud_container_name: "nextcloud-app"
+nextcloud_apache_port: "11000"
+
+# --- DOMAIN & NETWORK ---
+nextcloud_domain: "nextcloud.example.com"
+nextcloud_proxy_network: "proxy_net"
+
+# --- ADMIN CREDS & VAULT ---
+nextcloud_admin_user: "admin"
+nextcloud_admin_password: "{{ vault_nextcloud_password }}"
+
+# --- DATABASE CONFIG ---
+nextcloud_db_name: "nextcloud"
+nextcloud_db_user: "nextcloud"
+nextcloud_db_password: "{{ vault_nextcloud_db_password }}"
+
+# --- REDIS CONFIG ---
+nextcloud_redis_host: "redis"
+nextcloud_redis_port: 6379
+
+# --- SYSTEM PERFORMANCE & SECURITY ---
+nextcloud_trusted_proxies:
+  - "172.16.0.0/12"
+nextcloud_default_phone_region: "SK"
+nextcloud_server_id: "gaia-nc-01"
+nextcloud_maintenance_window_start: 1
+
+# --- VOLITEĽNÉ MIKROSLUŽBY & INTEGRÁCIE ---
+nextcloud_enable_imaginary: true
+nextcloud_imaginary_url: "http://imaginary:9000"
+
+nextcloud_enable_collabora: true
+nextcloud_collabora_url: "http://collabora:9980"
+
+# --- MAINTENANCE (ÚDRŽBA) ---
+# V predvolenom stave VYPNUTÉ - spúšťať len manuálne pri údržbe!
+nextcloud_run_repair: false

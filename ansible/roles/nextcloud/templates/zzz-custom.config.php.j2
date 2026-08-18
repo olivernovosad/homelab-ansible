@@ -1,0 +1,24 @@
+<?php
+/**
+ * Managed by Ansible - DO NOT EDIT MANUALLY
+ */
+$CONFIG = array (
+  'memcache.local' => '\OC\Memcache\APCu',
+  'memcache.locking' => '\OC\Memcache\Redis',
+  'redis' => array (
+    'host' => '{{ nextcloud_redis_host }}',
+    'port' => {{ nextcloud_redis_port }},
+  ),
+  'overwriteprotocol' => 'https',
+  'overwrite.cli.url' => 'https://{{ nextcloud_domain }}',
+  'trusted_proxies' => {{ nextcloud_trusted_proxies | to_json }},
+  'default_phone_region' => '{{ nextcloud_default_phone_region }}',
+  'maintenance_window_start' => {{ nextcloud_maintenance_window_start }},
+  'server_id' => '{{ nextcloud_server_id }}',
+{% if nextcloud_enable_imaginary | bool %}
+  'enabledPreviewProviders' => array (
+    0 => 'OC\Preview\Imaginary',
+  ),
+  'preview_imaginary_url' => '{{ nextcloud_imaginary_url }}',
+{% endif %}
+);

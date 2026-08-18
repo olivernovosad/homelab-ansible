@@ -1,0 +1,100 @@
+networks:
+  nextcloud_internal:
+    driver: bridge
+  {{ nextcloud_proxy_network }}:
+    external: true
+
+volumes:
+  nextcloud_data:
+  nextcloud_db_data:
+  redis_data:
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: nextcloud-db
+    restart: always
+    env_file:
+      - nextcloud.env
+    volumes:
+      - nextcloud_db_data:/var/lib/postgresql/data
+    networks:
+      - nextcloud_internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U {{ nextcloud_db_user }} -d {{ nextcloud_db_name }}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:alpine
+    container_name: nextcloud-redis
+    restart: always
+    volumes:
+      - redis_data:/data
+    networks:
+      - nextcloud_internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    image: nextcloud:28.0.2-apache
+    container_name: {{ nextcloud_container_name }}
+    restart: always
+    ports:
+      - "127.0.0.1:{{ nextcloud_apache_port }}:80"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - nextcloud.env
+    volumes:
+      - nextcloud_data:/var/www/html
+      - {{ nextcloud_dir }}/config:/var/www/html/config:rw
+    environment:
+      POSTGRES_HOST: db
+      NEXTCLOUD_TRUSTED_DOMAINS: "{{ nextcloud_domain }} 127.0.0.1 localhost"
+    networks:
+      - nextcloud_internal
+      - {{ nextcloud_proxy_network }}
+
+  cron:
+    image: nextcloud:28.0.2-apache
+    container_name: nextcloud-cron
+    restart: always
+    volumes:
+      - nextcloud_data:/var/www/html
+      - {{ nextcloud_dir }}/config:/var/www/html/config:rw
+    entrypoint: /cron.sh
+    depends_on:
+      - app
+    networks:
+      - nextcloud_internal
+
+{% if nextcloud_enable_imaginary | bool %}
+  imaginary:
+    image: h2non/imaginary:latest
+    container_name: nextcloud-imaginary
+    restart: always
+    command: -enable-url-source
+    networks:
+      - nextcloud_internal
+{% endif %}
+
+{% if nextcloud_enable_collabora | bool %}
+  collabora:
+    image: collabora/code:latest
+    container_name: nextcloud-collabora
+    restart: always
+    environment:
+      aliasgroup1: "https://{{ nextcloud_domain }}:443"
+      extra_params: "--o:ssl.enable=false --o:ssl.termination=true"
+    networks:
+      - nextcloud_internal
+      - {{ nextcloud_proxy_network }}
+{% endif %}
