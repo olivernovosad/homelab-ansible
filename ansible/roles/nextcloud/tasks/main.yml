@@ -57,6 +57,9 @@
       ansible.builtin.command:
         cmd: "docker exec -u www-data {{ nextcloud_container_name }} php occ app:enable richdocuments"
       when: "'richdocuments' not in (nc_apps_raw.stdout | from_json).enabled"
+      # Toto reálne mení stav v Nextcloude, takže changed_when nastavíme na true, 
+      # keďže sa táto úloha spustí len vtedy, keď aplikácia nebola povolená:
+      changed_when: true
 
     - name: Skontroluj aktuálne nastavenú WOPI URL pre Collabora
       ansible.builtin.command:
@@ -69,11 +72,15 @@
       ansible.builtin.command:
         cmd: "docker exec -u www-data {{ nextcloud_container_name }} php occ config:app:set richdocuments wopi_url --value='{{ nextcloud_collabora_url }}'"
       when: nc_wopi_url.stdout | trim != nextcloud_collabora_url
-
+      # Táto úloha mení konfiguráciu v databáze, ak nesedí URL:
+      changed_when: true
+      
 - name: "Spustenie opravy a migrácie mimetype databázy (Manuálna údržba)"
   ansible.builtin.command:
     cmd: "docker exec -u www-data {{ nextcloud_container_name }} php occ maintenance:repair --include-expensive"
   when: nextcloud_run_repair | bool
+  # Údržba a oprava databázy mení záznamy v systéme:
+  changed_when: true
   tags:
     - never
     - repair

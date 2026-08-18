@@ -21,7 +21,7 @@
 # ===========================================================================
 # 2. BEZPEČNÁ KONTROLA STARÝCH NEOFICIÁLNYCH BALÍKOV
 # ===========================================================================
-# DÔLEŽITÉ: NIKDY tu nesmú byť balíčky 'containerd' ani 'runc'! 
+# DÔLEŽITÉ: NIKDY tu nesmú byť balíčky 'containerd' ani 'runc'!
 # Súčasný Docker CE využíva 'containerd.io'. Ak by sa tu objavili, APT rozbije
 # závislosti a zhodí bežiaceho Docker démona aj s kontajnermi.
 - name: Uisti sa, že staré neoficiálne Ubuntu balíčky Dockeru sú preč
@@ -88,7 +88,7 @@
     enabled: true
   become: true
 
-- name: Pridaj používateľa {{ ansible_user }} do skupiny docker
+- name: Pridaj do skupiny docker používateľa: {{ ansible_user }}
   ansible.builtin.user:
     name: "{{ ansible_user }}"
     groups: docker
