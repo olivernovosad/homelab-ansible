@@ -8,41 +8,95 @@
     state: present
     update_cache: true
     cache_valid_time: 3600
+  become: true
 
 - name: Uistenie sa, že QEMU Guest Agent beží
   ansible.builtin.systemd:
     name: qemu-guest-agent
     state: started
     enabled: true
-  when: ansible_virtualization_role == 'guest'
+  when: ansible_facts['virtualization_role'] == 'guest'
+  become: true
+
 # ===========================================================================
-# 2. DOCKER A SKUPINY
+# 2. BEZPEČNÁ KONTROLA STARÝCH NEOFICIÁLNYCH BALÍKOV
 # ===========================================================================
-- name: Odstránenie prípadných konfliktných Docker CE balíkov
+# DÔLEŽITÉ: NIKDY tu nesmú byť balíčky 'containerd' ani 'runc'! 
+# Súčasný Docker CE využíva 'containerd.io'. Ak by sa tu objavili, APT rozbije
+# závislosti a zhodí bežiaceho Docker démona aj s kontajnermi.
+- name: Uisti sa, že staré neoficiálne Ubuntu balíčky Dockeru sú preč
+  ansible.builtin.apt:
+    name:
+      - docker.io
+      - docker-doc
+      - docker-compose
+      - docker-compose-v2
+      - podman-docker
+    state: absent
+    purge: false
+  become: true
+
+# ===========================================================================
+# 3. DOCKER CE A OFICIÁLNY REPOZITÁR
+# ===========================================================================
+- name: Inštalácia závislostí pre Docker APT repozitár
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+    state: present
+  become: true
+
+- name: Vytvor adresár pre kľúče APT
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+  become: true
+
+- name: Stiahni oficiálny GPG kľúč Dockeru
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: '0644'
+    force: false
+  become: true
+
+- name: Pridaj Docker CE repozitár do APT
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_facts['distribution_release'] }} stable"
+    state: present
+    filename: docker
+  become: true
+
+- name: Inštalácia oficiálnych Docker CE balíčkov
   ansible.builtin.apt:
     name:
       - docker-ce
       - docker-ce-cli
-      - docker-compose-plugin
       - containerd.io
-    state: absent
-    purge: true
-
-- name: Inštalácia Dockeru a Compose pluginu
-  ansible.builtin.apt:
-    name:
-      - docker.io
-      - docker-compose-v2
+      - docker-buildx-plugin
+      - docker-compose-plugin
     state: present
+  become: true
 
-- name: Pridanie spravovaného používateľa do skupiny docker
+- name: Uisti sa, že Docker služba beží a je povolená po boote
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: true
+  become: true
+
+- name: Pridaj používateľa {{ ansible_user }} do skupiny docker
   ansible.builtin.user:
     name: "{{ ansible_user }}"
     groups: docker
     append: true
+  become: true
 
 # ===========================================================================
-# 3. SSH HARDENING
+# 4. SSH HARDENING
 # ===========================================================================
 - name: Aplikácia bezpečnej SSH konfigurácie (Drop-in file)
   ansible.builtin.copy:
@@ -55,14 +109,16 @@
       AllowTcpForwarding yes
     mode: '0600'
   notify: Restart SSH
+  become: true
 
 # ===========================================================================
-# 4. UFW FIREWALL CONFIGURATION
+# 5. UFW FIREWALL CONFIGURATION
 # ===========================================================================
 - name: Nastavenie základnej UFW politiky (deny incoming)
   community.general.ufw:
     policy: deny
     direction: incoming
+  become: true
 
 - name: Povolenie SSH portu pre spravované siete (LAN + Libvirt KVM)
   community.general.ufw:
@@ -73,6 +129,7 @@
   loop:
     - "{{ lan_subnet }}"
     - "192.168.122.0/24" # Libvirt Subnet (Staging)
+  become: true
 
 - name: Povolenie HTTP a HTTPS pre testovacie webové služby
   community.general.ufw:
@@ -82,18 +139,21 @@
   loop:
     - '80'
     - '443'
+  become: true
 
 - name: Povolenie komunikácie pre Docker siete
   community.general.ufw:
     rule: allow
     src: "{{ docker_subnet }}"
+  become: true
 
 - name: Aktivácia UFW Firewallu
   community.general.ufw:
     state: enabled
+  become: true
 
 # ===========================================================================
-# 5. KERNEL HARDENING (SYSCTL)
+# 6. KERNEL HARDENING (SYSCTL)
 # ===========================================================================
 - name: Konfigurácia sysctl pre sieťovú bezpečnosť a Docker
   ansible.posix.sysctl:
@@ -106,3 +166,4 @@
     - { key: 'net.ipv4.conf.all.accept_redirects', value: '0' }
     - { key: 'net.ipv4.conf.all.send_redirects', value: '0' }
     - { key: 'net.ipv4.ip_forward', value: '1' }
+  become: true
