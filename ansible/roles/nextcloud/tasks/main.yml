@@ -57,7 +57,7 @@
       ansible.builtin.command:
         cmd: "docker exec -u www-data {{ nextcloud_container_name }} php occ app:enable richdocuments"
       when: "'richdocuments' not in (nc_apps_raw.stdout | from_json).enabled"
-      # Toto reálne mení stav v Nextcloude, takže changed_when nastavíme na true, 
+      # Toto reálne mení stav v Nextcloude, takže changed_when nastavíme na true,
       # keďže sa táto úloha spustí len vtedy, keď aplikácia nebola povolená:
       changed_when: true
 
@@ -74,7 +74,7 @@
       when: nc_wopi_url.stdout | trim != nextcloud_collabora_url
       # Táto úloha mení konfiguráciu v databáze, ak nesedí URL:
       changed_when: true
-      
+
 - name: "Spustenie opravy a migrácie mimetype databázy (Manuálna údržba)"
   ansible.builtin.command:
     cmd: "docker exec -u www-data {{ nextcloud_container_name }} php occ maintenance:repair --include-expensive"
