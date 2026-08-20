@@ -18,5 +18,5 @@ jobs:
           scan-type: 'config'
           hide-progress: false
           format: 'table'
-          exit-code: '1' # Zlyhá workflow, ak nájde kritické (CRITICAL) zraniteľnosti
+          exit-code: '1' # Fails the workflow if CRITICAL vulnerabilities are found
           severity: 'CRITICAL,HIGH'

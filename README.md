@@ -1,149 +1,184 @@
-# 🚀 Gaia Homelab - Infrastructure as Code (Ansible)
+# 🚀 Gaia Homelab — Infrastructure as Code
 
-Tento repozitár obsahuje kompletnú **Ansible** konfiguráciu pre automatizovanú správu, nasadenie a údržbu domáceho servera **Gaia** (`gaia-server`). Server beží na **Ubuntu Server** s využitím Docker kontajnerov pre izoláciu služieb.
+[![Ansible Lint](https://img.shields.io/github/actions/workflow/status/<user>/<repo>/ansible-lint.yml?label=ansible-lint)](../../actions)
+[![Terraform CI](https://img.shields.io/github/actions/workflow/status/<user>/<repo>/terraform.yml?label=terraform)](../../actions)
+[![Secret Scan](https://img.shields.io/github/actions/workflow/status/<user>/<repo>/secret-scan.yml?label=gitleaks)](../../actions)
+[![Security Scan](https://img.shields.io/github/actions/workflow/status/<user>/<repo>/security-scan.yml?label=trivy)](../../actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
----
-
-## 🛠️ Hardvérová & Architektúrna špecifikácia
-
-Server využíva trojúrovňové úložisko prispôsobené pre výkon, kapacitu a bezpečnosť dát:
-
-| Disk / Zariadenie | Typ úložiska | Pripojenie (Mount point) | Účel |
-| :--- | :--- | :--- | :--- |
-| **NVMe (`nvme0n1`)** | Základný systém | `/` (Ubuntu LVM ~389 GB) | Operačný systém, Docker engine, rýchle systémové operácie. |
-| **SATA SSD (`sda1`)** | Fast Storage | `/mnt/ssd` (~889 GB free) | Vysokorýchlostné dátové úložisko pre **Nextcloud AIO** (`/mnt/ssd/nextcloud-data`). |
-| **8TB HDD (`sdb1`)** | Mass Storage | `/mnt/hdd8T` (~2.7 TB free) | Objemné dáta: knižnica médií (`/data`), torrenty a zálohy Kopia (`/backups`). |
+> End-to-end Infrastructure as Code for a self-hosted homelab: **Ansible** for configuration management, **Terraform + libvirt/KVM** for a disposable staging environment, and a full **CI/CD pipeline** (lint, syntax check, secret scanning, config security scanning) — built and run solo, no prior professional ops experience.
 
 ---
 
-## 🧩 Štruktúra Docker Sietí & Bezpečnosť
+## Table of Contents
+- [Why this project exists](#why-this-project-exists)
+- [Architecture](#architecture)
+- [Security design decisions](#security-design-decisions)
+- [Tech stack](#tech-stack)
+- [Repository structure](#repository-structure)
+- [CI/CD pipeline](#cicd-pipeline)
+- [Test-before-prod workflow](#test-before-prod-workflow)
+- [Getting started](#getting-started)
+- [Lessons learned / trade-offs](#lessons-learned--trade-offs)
+- [Roadmap](#roadmap)
+- [About me](#about-me)
 
-Aplikácie sú rozdelené do izolovaných Docker sietí na základe ich funkcie a bezpečnostného profilu:
+---
 
-                  ┌─────────────────────────────────────────┐
-                  │          Internet / Cloudflare          │
-                  └────────────────────┬────────────────────┘
-                                       │
-            ┌──────────────────────────┴──────────────────────────┐
-            ▼                                                     ▼
-      [ Cloudflared ]                                          [ NPM ]
-     (Tunnel - tunnel_net)                                 (Proxy - proxy_net)
-             │                                                    │
-    ┌────────┴────────┬──────────────┐                    ┌───────┴────────┐
-    ▼                 ▼              ▼                    ▼                ▼
-    [Vaultwarden]  [Foundry VTT]   [DDB-Proxy]         [Nextcloud]      [Jellyfin]
-                                                          │                │
-                                                          └───────┬────────┘
-                                                                  ▼
-                                                             [media_net]
-                                                                  │
-                                                          ┌───────┴────────┐
-                                                          ▼                ▼
-                                                    [*arr Stack]      [Prowlarr]
-                                                                           │
-                                                                           ▼
-                                                                     [torrent_net]
-                                                                           │
-                                                                           ▼
-                                                                     [Gluetun VPN]
-                                                                           │
-                                                                           ▼
-                                                                     [qBittorrent]
+## Why this project exists
 
-proxy_net: Smerovanie verejných služieb cez Nginx Proxy Manager.
+I'm self-taught in DevOps/sysadmin practices and currently work in a non-technical support role. This repository is where I apply and practice the practices I'd expect to use on the job: idempotent config management, secrets handling, network segmentation, and a CI pipeline that actually gatekeeps changes — instead of a wiki page of manual steps.
 
-tunnel_net: Bezpečné publikovanie interných služieb prostredníctvom Cloudflare Tunnela.
+Everything here manages a real, currently-running home server (Ubuntu + Docker), not a toy demo.
 
-media_net: Interná komunikácia medzi media serverom (Jellyfin), požiadavkami (Jellyseerr) a správa médií (*arr aplikácie).
+## Architecture
 
-torrent_net: Izolovaná sieť pre sťahovanie. Všetok prevádzkový tok qBittorrent je povinne smerovaný cez Gluetun (Mullvad WireGuard VPN).
+```mermaid
+flowchart TB
+    INET([Internet]) --> CF[Cloudflare Tunnel]
+    INET --> NPM[Nginx Proxy Manager]
 
-monitoring: Zber metrík prostredníctvom Prometheus, cAdvisor a Node Exporter.
+    CF -->|tunnel_net| VW[Vaultwarden]
+    CF -->|tunnel_net| FVT[Foundry VTT]
+    CF -->|tunnel_net| DDB[DDB Proxy]
 
-📂 Prehľad Rölí a Služieb
-1. connection (Smerovanie & Repery)
-Nginx Proxy Manager (npm): Reverse proxy pre lokálny a verejný prístup (Porty 80, 443, 81).
+    NPM -->|proxy_net| NC[Nextcloud]
+    NPM -->|proxy_net| JF[Jellyfin]
 
-Cloudflare Tunnel (cloudflared): Zabezpečené prepojenie služieb bez nutnosti otvárania portov na routeri.
+    NC --> MEDIA_NET[media_net]
+    JF --> MEDIA_NET
+    MEDIA_NET --> ARR[*arr stack: Radarr/Sonarr/Lidarr/Bazarr]
+    MEDIA_NET --> PRWL[Prowlarr]
 
-2. vaultwarden (Správca hesiel)
-Vaultwarden: Ľahká implementácia Bitwarden servera napojená na tunnel_net.
+    PRWL --> TORRENT_NET[torrent_net]
+    ARR --> TORRENT_NET
+    TORRENT_NET --> GLUETUN[Gluetun VPN — Mullvad WireGuard]
+    GLUETUN --> QBIT[qBittorrent]
 
-3. nextcloud (Osobné cloudové úložisko)
-Nextcloud AIO Mastercontainer: Správa kompletného Nextcloud ekosystému. Dátový adresár umiestnený na rýchlom SSD (/mnt/ssd/nextcloud-data).
+    subgraph MON[monitoring network]
+        PROM[Prometheus] --- GRAF[Grafana]
+        PROM --- NODE[Node Exporter]
+        PROM --- CADV[cAdvisor]
+    end
+```
 
-4. media (Multimediálny Stack & VPN)
-Gluetun: WireGuard VPN klient (Mullvad) s automatickou kontrolou úniku verejnej IP.
+Traffic is split by trust boundary into isolated Docker networks:
 
-qBittorrent: Sťahovací klient plne izolovaný v sieti gluetun kontajnera.
+| Network | Purpose |
+|---|---|
+| `proxy_net` | Public-facing services routed through Nginx Proxy Manager |
+| `tunnel_net` | Internal services published via Cloudflare Tunnel (no open inbound ports) |
+| `media_net` | Media server ↔ media request/management apps |
+| `torrent_net` | Download stack — **all traffic forced through the Gluetun VPN container**, no direct internet path |
+| `monitoring` | Metrics collection, isolated from application traffic |
 
-Prowlarr & FlareSolverr: Správa indexerov a obchádzanie Cloudflare ochrán.
+## Security design decisions
 
-Media Managers: Radarr (Filmy), Sonarr (Seriály), Lidarr (Hudba), Mylar3 (Komiksy), Bazarr (Titulky).
+Rather than list every tool, here's the *reasoning* behind the choices that matter most on review:
 
-Jellyfin: Multimediálny prehrávač s hardvérovou akceleráciou transkódovania (Intel QuickSync passthrough /dev/dri).
+- **No secrets in plaintext.** All sensitive values live in `ansible-vault`-encrypted `vault.yml`; the vault password is resolved via `get-vault-pass.sh` (env var in CI, OS keyring locally) — same script, both environments.
+- **Docker socket is never mounted directly.** Watchtower and cAdvisor talk to a `tecnativa/docker-socket-proxy` container with a locked-down permission set (no `POST`, `BUILD`, `EXEC`, `DELETE`) instead of `/var/run/docker.sock`.
+- **VPN kill-switch for torrent traffic.** qBittorrent shares Gluetun's network namespace (`network_mode: container:gluetun`) — if the VPN drops, the download client loses connectivity entirely rather than falling back to the host's real IP.
+- **Admin UIs bound to loopback.** Nginx Proxy Manager's admin panel, Kopia's web UI, and the `*arr` dashboards are published on `127.0.0.1` only, not the LAN interface.
+- **Host hardening.** UFW default-deny inbound, SSH restricted to key-based auth with `PermitRootLogin no`, kernel `sysctl` hardening (SYN cookies, disabled ICMP redirects).
+- **CrowdSec** ingests Nginx/system logs and blocks malicious request patterns in near real time.
 
-Jellyseerr & Notifiarr: Správa používateľských požiadaviek a integrácia notifikácií.
+## Tech stack
 
-5. monitoring (Dohľad & Metriky)
-Prometheus: Zber a ukladanie časových radov metrík.
+| Layer | Tools |
+|---|---|
+| Configuration management | Ansible, Ansible Vault |
+| Infrastructure provisioning | Terraform, libvirt/KVM |
+| Containers | Docker, Docker Compose |
+| Reverse proxy / ingress | Nginx Proxy Manager, Cloudflare Tunnel |
+| Monitoring | Prometheus, Grafana, Node Exporter, cAdvisor |
+| Security | UFW, CrowdSec, Docker Socket Proxy, Gitleaks, Trivy |
+| CI/CD | GitHub Actions |
 
-Grafana: Vizualizačné nástenky (Port 3333).
-
-Node Exporter & cAdvisor: Zber metrík zo samotného Linux hostiteľa a Docker kontajnerov.
-
-6. foundry (Virtuálny stolový systém)
-Foundry VTT (v13): Server pre D&D / TTRPG hry.
-
-Autoheal: Automatický reštart zamrznutých kontajnerov podľa healthchecku.
-
-D&D Beyond Proxy (ddb-proxy): Pomocná služba pre integráciu podkladov.
-
-7. system (Údržba & Bezpečnosť)
-CrowdSec: Detekcia a blokovanie škodlivých požiadaviek z logov.
-
-Watchtower: Automatická aktualizácia Docker obrazov.
-
-Kopia Backup Server: Šifrované zálohovanie aplikačných dát a konfigurácií na 8TB HDD (/mnt/hdd8T/backups/kopia).
-
-Unattended-Upgrades: Automatické bezpečnostné aktualizácie Ubuntu systému s nastaveným reštartom o 04:00.
-
-## 🌲 Štruktúra Repozitára
+## Repository structure
 
 ```text
 .
-├── ansible.cfg                 # Globálna konfigurácia Ansible
-├── hosts.ini                   # Inventár serverov
-├── site.yml                    # Hlavný Ansible playbook
-├── group_vars/
-│   ├── all/
-│   │   └── vars.yml            # Globálne premenné (cesty, časové pásmo)
-│   └── homelab.yml             # Zašifrované tajné údaje (Ansible Vault)
-└── roles/
-    ├── connection/             # NPM & Cloudflared
-    ├── foundry/                # Foundry VTT & DDB Proxy
-    ├── media/                  # Jellyfin & *arr Stack & Gluetun VPN
-    ├── monitoring/             # Grafana & Prometheus
-    ├── nextcloud/              # Nextcloud AIO
-    ├── system/                 # CrowdSec, Watchtower, Kopia, OS Updates
-    └── vaultwarden/            # Vaultwarden
+├── ansible/
+│   ├── ansible.cfg
+│   ├── site.yml                  # Main playbook
+│   ├── get-vault-pass.sh         # Resolves vault password (CI env var / local keyring)
+│   ├── group_vars/
+│   │   ├── all/vars.yml          # Shared variables
+│   │   └── all/vault.yml         # Ansible Vault — encrypted secrets
+│   ├── inventories/
+│   │   ├── dev.ini               # Staging (generated by Terraform)
+│   │   └── prod.ini.example      # Template — real inventory kept out of git
+│   └── roles/
+│       ├── bootstrap/            # OS hardening, UFW, sysctl, Docker Engine
+│       ├── system/                # Watchtower, CrowdSec, Kopia backups, docker-proxy
+│       ├── connection/            # Nginx Proxy Manager, Cloudflare Tunnel
+│       ├── vaultwarden/
+│       ├── nextcloud/
+│       ├── media/                 # Jellyfin, *arr stack, Gluetun VPN, qBittorrent
+│       ├── monitoring/            # Prometheus, Grafana, exporters
+│       └── foundry/                # Foundry VTT
+├── terraform/dev/                # Disposable KVM staging VM for pre-prod testing
+└── .github/workflows/            # Lint, syntax check, secret scan, config scan, terraform CI
 ```
 
+## CI/CD pipeline
 
-🚀 Spustenie a Nasadenie
-Požiadavky:
-Nainštalovaný Ansible na riadiacom počítači.
+Every push/PR runs:
 
-Nainštalovaná kolekcia pre Docker:
-```text
-ansible-galaxy collection install community.docker
+| Workflow | What it checks |
+|---|---|
+| `ansible-lint.yml` | Ansible best-practice linting (`production` profile) |
+| `ansible-syntax.yml` | Playbook syntax validation |
+| `secret-scan.yml` | Gitleaks — fails the build if a secret is ever committed |
+| `security-scan.yml` | Trivy config scan for CRITICAL/HIGH misconfigurations |
+| `terraform.yml` | `terraform fmt -check`, `init`, `validate` on any Terraform change |
+
+## Test-before-prod workflow
+
+Changes aren't applied directly to the production host. `terraform/dev` provisions a throwaway Ubuntu VM on local KVM/libvirt, auto-generates its Ansible inventory, and the same `site.yml` playbook runs against it first:
+
+```bash
+cd terraform/dev
+terraform apply                 # spins up a disposable staging VM, writes ansible/inventories/dev.ini
+cd ../../ansible
+ansible-playbook site.yml -i inventories/dev.ini --ask-vault-pass
 ```
-Spustenie Playbooku:
-Pre kompletné nasadenie alebo aktualizáciu celej infraštruktúry spusti:
-```text
-ansible-playbook -i hosts.ini site.yml --ask-vault-pass
+
+Once verified, the identical playbook targets production:
+
+```bash
+ansible-playbook site.yml -i inventories/prod.ini --ask-vault-pass --limit homelab
 ```
-Spustenie konkrétnej úlohy/role (napr. iba media stack):
-```text
-ansible-playbook -i hosts.ini site.yml --tags media --ask-vault-pass
+
+## Getting started
+
+**Requirements:** Ansible, the `community.docker` and `community.general` collections, Terraform + libvirt (for staging only).
+
+```bash
+ansible-galaxy collection install community.docker community.general
 ```
+
+Copy `ansible/inventories/prod.ini.example` to `prod.ini` and fill in your own hosts, then run as shown above. A vault password is required — either export `ANSIBLE_VAULT_PASSWORD` or store it in your OS keyring (see `get-vault-pass.sh`).
+
+## Lessons learned / trade-offs
+
+Deliberate, documented trade-offs rather than oversights:
+
+- **Most images run on `:latest` with Watchtower auto-updating them.** Great for a single-operator homelab, non-reproducible for a real production fleet — in a team setting I'd pin versions and stage updates instead.
+- **Terraform state is local, no remote backend/locking.** Fine for a single contributor; would move to a remote backend (S3/Terraform Cloud) with locking for anything collaborative.
+- **Kopia backup runs as root inside its container** to read appdata owned by multiple UIDs across services — a narrower, per-service backup permission model is on the list.
+
+## Roadmap
+
+- [ ] Pin container image versions; move to scheduled, reviewed updates
+- [ ] Remote Terraform backend with state locking
+- [ ] Molecule tests for Ansible roles
+- [ ] Alertmanager rules on top of the existing Prometheus/Grafana stack
+
+## About me
+
+Self-taught in DevOps/sysadmin practices, currently working as a Support Associate. Background in front-end development (AP Degree, Multimedia Design, IBA — Denmark). Looking for a junior/mid-level DevOps or SysAdmin role.
+
+- LinkedIn: [add link]
+- Email: [add contact]
