@@ -22,7 +22,6 @@ kompletny_kod.txt
 *.retry
 .vault_pass*
 *.vault_password
-ansible/get-vault-pass.sh
 .ansible/
 __pycache__/
 
