@@ -8,6 +8,7 @@ exclude_paths:
   - inventories/
 
 # Rules to skip (in case of false-positives)
+skip_list:
   - yaml[comments]    # Do not trigger errors for missing comments in YAML
   - fqcn[action-core] # If ansible.builtin. prefix is omitted
   - var-naming        # Allow global variable names in defaults/

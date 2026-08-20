@@ -10,7 +10,7 @@
 - name: Start Nginx Proxy Manager (npm)
   community.docker.docker_container:
     name: npm
-    image: "{{ npm_image }}"
+    image: "{{ connection_npm_image }}"
     state: started
     restart_policy: unless-stopped
     ports:
@@ -26,12 +26,12 @@
 - name: Start Cloudflare Tunnel (cloudflared)
   community.docker.docker_container:
     name: cloudflared
-    image: "{{ cloudflared_image }}"
+    image: "{{ connection_cloudflared_image }}"
     state: started
     init: true
     restart_policy: unless-stopped
     env:
-      TUNNEL_TOKEN: "{{ cloudflare_tunnel_token }}"
+      TUNNEL_TOKEN: "{{ connection_cloudflare_tunnel_token }}"
     command: "tunnel --no-autoupdate run"
     networks:
       - name: tunnel_net

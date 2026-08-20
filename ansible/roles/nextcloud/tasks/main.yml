@@ -39,8 +39,8 @@
   ansible.builtin.uri:
     url: "http://127.0.0.1:{{ nextcloud_apache_port }}/status.php"
     status_code: 200
-  register: nc_status
-  until: nc_status.status == 200
+  register: nextcloud_status
+  until: nextcloud_status.status == 200
   retries: 30
   delay: 10
 
@@ -50,13 +50,13 @@
     - name: Get list of installed apps in JSON format
       ansible.builtin.command:
         cmd: "docker exec -u www-data {{ nextcloud_container_name }} php occ app:list --output=json"
-      register: nc_apps_raw
+      register: nextcloud_apps_raw
       changed_when: false
 
     - name: Enable richdocuments app (if not already enabled)
       ansible.builtin.command:
         cmd: "docker exec -u www-data {{ nextcloud_container_name }} php occ app:enable richdocuments"
-      when: "'richdocuments' not in (nc_apps_raw.stdout | from_json).enabled"
+      when: "'richdocuments' not in (nextcloud_apps_raw.stdout | from_json).enabled"
       # This changes stat in Nextcloud, meaning changed_when needs to be se to true,
       # because this task will be only run if app was not allowed:
       changed_when: true
@@ -64,14 +64,14 @@
     - name: Check the currently configured WOPI URL for Collabora
       ansible.builtin.command:
         cmd: "docker exec -u www-data {{ nextcloud_container_name }} php occ config:app:get richdocuments wopi_url"
-      register: nc_wopi_url
+      register: nextcloud_wopi_url
       changed_when: false
       failed_when: false
 
     - name: Set WOPI URL for Collabora
       ansible.builtin.command:
         cmd: "docker exec -u www-data {{ nextcloud_container_name }} php occ config:app:set richdocuments wopi_url --value='{{ nextcloud_collabora_url }}'"
-      when: nc_wopi_url.stdout | trim != nextcloud_collabora_url
+      when: nextcloud_wopi_url.stdout | trim != nextcloud_collabora_url
       changed_when: true
 
 - name: "Deployment of fixes and migration of mimetype database (Manual maintanance)"

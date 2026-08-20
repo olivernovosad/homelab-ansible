@@ -1,6 +1,6 @@
 ---
-npm_image: "jc21/nginx-proxy-manager:latest"
-cloudflared_image: "cloudflare/cloudflared:latest"
+connection_npm_image: "jc21/nginx-proxy-manager:latest"
+connection_cloudflared_image: "cloudflare/cloudflared:latest"
 
 # Connection to token in vault
-cloudflare_tunnel_token: "{{ vault_cloudflare_tunnel_token }}"
+connection_cloudflare_tunnel_token: "{{ vault_cloudflare_tunnel_token }}"
