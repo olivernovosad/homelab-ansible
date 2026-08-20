@@ -1,17 +1,17 @@
 ---
 system_update_reboot_if_needed: false
-# Globálne DevOps premenné pre celý server
+# Global DevOps variables for the entire server
 base_docker_path: "/opt/docker"
 appdata_path: "{{ base_docker_path }}/app-data"
-# Globálne nastavenia
+# Global settings
 timezone: "Europe/Bratislava"
-# Tu neskôr zadefinujeme aj cesty k filmom/seriálom na disku
+# Movie/series paths on disk will be defined here later
 # media_movies_path: "/mnt/storage/movies"
-# Sieťové nastavenia
+# Network settings
 lan_subnet: "192.168.0.0/24"
 docker_subnet: "172.16.0.0/12"
 
-# Systémové balíky pre bootstrap
+# System packages for bootstrap
 base_packages:
   - qemu-guest-agent
   - ufw
@@ -22,6 +22,6 @@ base_packages:
   - ca-certificates
   - gnupg
 
-# Správa diskových ciest
+# Storage path management
 storage_ssd_path: "/mnt/ssd"
 storage_hdd_path: "/mnt/hdd8T"

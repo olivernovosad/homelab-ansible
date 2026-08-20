@@ -2,9 +2,9 @@
 ansible_user: sysadmin
 node_env: staging
 
-# Diskové cesty pre staging (ak napr. v staginigu nemáš druhý HDD, namapujeme to do dočasných zložiek)
+# Disk paths for staging (e.g., if staging doesn't have a second HDD, map to temporary directories)
 storage_ssd_path: "/mnt/ssd"
 storage_hdd_path: "/mnt/hdd8T"
 
-# Na staginigu nemusia byť fyzické disky prítomné
+# Physical disks do not need to be present in staging
 mount_physical_disks: false

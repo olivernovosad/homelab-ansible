@@ -1,8 +1,8 @@
 ---
 # ===========================================================================
-# 1. PRÍPRAVA ADRESÁROV, KONFIGURÁCIE A DOCKER SIETE
+# 1. DIRECTORY, CONFIGURATION, AND DOCKER NETWORK PREPARATION
 # ===========================================================================
-- name: Vytvor adresár pre Prometheus
+- name: Create Prometheus directories
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -13,7 +13,7 @@
     - /opt/docker/app-data/prometheus
     - /opt/docker/app-data/prometheus/data
 
-- name: Vytvor adresár pre Grafana
+- name: Create Grafana directory
   ansible.builtin.file:
     path: "{{ appdata_path }}/grafana"
     state: directory
@@ -21,7 +21,7 @@
     group: "472"
     mode: '0755'
 
-- name: Vytvor základný prometheus.yml súbor (ak neexistuje)
+- name: Create default prometheus.yml file (if it does not exist)
   ansible.builtin.copy:
     dest: "{{ appdata_path }}/prometheus/prometheus.yml"
     content: |
@@ -44,7 +44,7 @@
     force: false
     mode: '0644'
 
-- name: Uisti sa, že Docker sieť existuje
+- name: Ensure Docker network exists
   community.docker.docker_network:
     name: monitoring
     state: present
@@ -52,7 +52,7 @@
 # ===========================================================================
 # 2. METRICS COLLECTION - Prometheus
 # ===========================================================================
-- name: Spusti Prometheus kontajner
+- name: Deploy Prometheus container
   community.docker.docker_container:
     name: prometheus
     image: prom/prometheus:latest
@@ -71,7 +71,7 @@
 # ===========================================================================
 # 3. DASHBOARDS & VISUALIZATION - Grafana
 # ===========================================================================
-- name: Spusti Grafana kontajner
+- name: Deploy Grafana container
   community.docker.docker_container:
     name: grafana
     image: grafana/grafana:latest
@@ -88,7 +88,7 @@
 # ===========================================================================
 # 4. HOST METRICS - Node Exporter
 # ===========================================================================
-- name: Spusti Node Exporter kontajner
+- name: Deploy Node Exporter container
   community.docker.docker_container:
     name: node-exporter
     image: prom/node-exporter:latest
@@ -110,7 +110,7 @@
 # ===========================================================================
 # 5. CONTAINER METRICS - cAdvisor
 # ===========================================================================
-- name: Spusti cAdvisor kontajner
+- name: Deploy cAdvisor container
   community.docker.docker_container:
     name: cadvisor
     image: gcr.io/cadvisor/cadvisor:v0.49.1

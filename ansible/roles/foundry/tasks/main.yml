@@ -2,7 +2,7 @@
 # ===========================================================================
 # 1. Prep of directory and docker network
 # ===========================================================================
-- name: Created Data directory for Foundry VTT
+- name: Create data directory for Foundry VTT
   ansible.builtin.file:
     path: "{{ appdata_path }}/vttfoundry"
     state: directory
@@ -50,7 +50,7 @@
 # ===========================================================================
 # 3. D&D BEYOND PROXY
 # ===========================================================================
-- name: Turn on DDB proxy container
+- name: Deploy D&D Beyond Proxy container
   community.docker.docker_container:
     name: ddb-proxy
     image: ghcr.io/mrprimate/ddb-proxy:latest

@@ -28,13 +28,13 @@ nextcloud_default_phone_region: "SK"
 nextcloud_server_id: "gaia-nc-01"
 nextcloud_maintenance_window_start: 1
 
-# --- VOLITEĽNÉ MIKROSLUŽBY & INTEGRÁCIE ---
+# --- Optional microservices and integrations ---
 nextcloud_enable_imaginary: true
 nextcloud_imaginary_url: "http://imaginary:9000"
 
 nextcloud_enable_collabora: true
 nextcloud_collabora_url: "http://collabora:9980"
 
-# --- MAINTENANCE (ÚDRŽBA) ---
-# V predvolenom stave VYPNUTÉ - spúšťať len manuálne pri údržbe!
+# --- MAINTENANCE---
+# Turned off in preset - turn on only manually on maintanance!
 nextcloud_run_repair: false

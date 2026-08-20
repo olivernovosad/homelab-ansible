@@ -1,45 +1,45 @@
 ---
-- name: Správa aktualizácií systému
+- name: System Update Management
   hosts: homelab
-  become: true # Vyžaduje administrátorské práva (sudo)
-  
+  become: true # Requires administrator privileges (sudo)
+
   tasks:
-    
-    # 1. KROK: Obnovenie zoznamu balíčkov (apt update)
-    - name: Aktualizácia lokálnej APT cache
+
+    # STEP 1: Refresh package list (apt update)
+    - name: Update local APT cache
       apt:
         update_cache: true
-        cache_valid_time: 3600 # Cache sa nebude sťahovať znova, ak od poslednej kontroly ubehla menej ako hodina
+        cache_valid_time: 3600 # Cache will not be re-downloaded if less than an hour has passed since the last check
       tags: update
 
-    # 2. KROK: Samotná inštalácia aktualizácií (apt upgrade --dist-upgrade)
-    - name: Bezpečná aktualizácia všetkých balíčkov na najnovšiu verziu
+    # STEP 2: Actual installation of updates (apt upgrade --dist-upgrade)
+    - name: Safe upgrade of all packages to the latest version
       apt:
-        upgrade: dist # "dist" rieši aj inteligentné pridávanie/odoberanie závislostí ako v korporátnom Ubuntu
-        autoremove: true # Automaticky vymaže staré nepotrebné balíčky (tzv. orphan packages)
-      register: vysledok_aktualizacie
+        upgrade: dist # "dist" also handles smart addition/removal of dependencies like in enterprise Ubuntu
+        autoremove: true # Automatically remove old unnecessary packages (orphan packages)
+      register: update_result
       tags: upgrade
 
-    # 3. KROK: Kontrola, či systém vyžaduje reštart
-    - name: Overenie, či systém po aktualizácii vyžaduje reštart
+    # STEP 3: Check if the system requires a reboot
+    - name: Verify whether the system requires a reboot after update
       stat:
         path: /var/run/reboot-required
-      register: subor_restartu
+      register: reboot_file
 
-    # 4. KROK: Riadený reštart (iba ak je nutný)
-    - name: Reštartovanie servera (iba ak kernel alebo kľúčové služby vyžadujú reštart)
+    # STEP 4: Controlled reboot (only if necessary)
+    - name: Restart server (only if kernel or core services require a reboot)
       reboot:
-        msg: "Ansible automatizovaný reštart: Systém bol úspešne aktualizovaný."
+        msg: "Ansible automated restart: System has been successfully updated."
         connect_timeout: 5
-        reboot_timeout: 300 # Počká maximálne 5 minút, kým server znova nabehne
+        reboot_timeout: 300 # Wait maximum 5 minutes for the server to come back online
         pre_reboot_delay: 0
-        post_reboot_delay: 30 # Po nabehnutí počká 30 sekúnd, kým pustí ďalšie služby
-      when: subor_restartu.stat.exists # Spustí sa LEN vtedy, ak subor_restartu existuje
+        post_reboot_delay: 30 # Wait 30 seconds after startup before running other services
+      when: reboot_file.stat.exists # Runs ONLY if reboot_file exists
 
-    # 5. KROK: Finálny výstup pre operátora
-    - name: Výpis stavu aktualizácie
+    # STEP 5: Final output for the operator
+    - name: Print update status summary
       debug:
         msg: >
-          Aktualizácia prebehla úspešne. 
-          Balíčky boli aktualizované: {{ vysledok_aktualizacie.changed }}. 
-          Server bol reštartovaný: {{ subor_restartu.stat.exists }}.
+          Update completed successfully.
+          Packages were updated: {{ update_result.changed }}.
+          Server was rebooted: {{ reboot_file.stat.exists }}.

@@ -1,5 +1,5 @@
 ---
-- name: "Vytvor adresárovú štruktúru pre Nextcloud"
+- name: "Create Nextcloud directory structure"
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -16,7 +16,7 @@
     dest: "{{ nextcloud_dir }}/nextcloud.env"
     mode: '0600'
 
-- name: "Vygeneruj custom PHP konfiguráciu Nextcloudu"
+- name: "Generate custom Nextcloud PHP configuration"
   ansible.builtin.template:
     src: zzz-custom.config.php.j2
     dest: "{{ nextcloud_dir }}/config/zzz-custom.config.php"
@@ -24,18 +24,18 @@
     group: "33"
     mode: '0644'
 
-- name: "Vygeneruj docker-compose.yml zo šablóny"
+- name: "Generate docker-compose.yml from template"
   ansible.builtin.template:
     src: docker-compose.yml.j2
     dest: "{{ nextcloud_dir }}/docker-compose.yml"
     mode: '0644'
 
-- name: "Spusti Nextcloud Stack cez Docker Compose"
+- name: "Start Nextcloud stack via Docker Compose"
   community.docker.docker_compose_v2:
     project_src: "{{ nextcloud_dir }}"
     state: present
 
-- name: "Počkaj, kým Nextcloud Container dokončí inicializáciu"
+- name: "Wait for Nextcloud container to finish initializing"
   ansible.builtin.uri:
     url: "http://127.0.0.1:{{ nextcloud_apache_port }}/status.php"
     status_code: 200
@@ -44,42 +44,40 @@
   retries: 30
   delay: 10
 
-- name: "Konfigurácia Collabora Office (Richdocuments)"
+- name: "Configuration of Collabora Office (Richdocuments)"
   when: nextcloud_enable_collabora | bool
   block:
-    - name: Získaj zoznam nainštalovaných aplikácií v JSON formáte
+    - name: Get list of installed apps in JSON format
       ansible.builtin.command:
         cmd: "docker exec -u www-data {{ nextcloud_container_name }} php occ app:list --output=json"
       register: nc_apps_raw
       changed_when: false
 
-    - name: Povol aplikáciu richdocuments (ak nie je aktivovaná)
+    - name: Enable richdocuments app (if not already enabled)
       ansible.builtin.command:
         cmd: "docker exec -u www-data {{ nextcloud_container_name }} php occ app:enable richdocuments"
       when: "'richdocuments' not in (nc_apps_raw.stdout | from_json).enabled"
-      # Toto reálne mení stav v Nextcloude, takže changed_when nastavíme na true,
-      # keďže sa táto úloha spustí len vtedy, keď aplikácia nebola povolená:
+      # This changes stat in Nextcloud, meaning changed_when needs to be se to true,
+      # because this task will be only run if app was not allowed:
       changed_when: true
 
-    - name: Skontroluj aktuálne nastavenú WOPI URL pre Collabora
+    - name: Check the currently configured WOPI URL for Collabora
       ansible.builtin.command:
         cmd: "docker exec -u www-data {{ nextcloud_container_name }} php occ config:app:get richdocuments wopi_url"
       register: nc_wopi_url
       changed_when: false
       failed_when: false
 
-    - name: Nastav WOPI URL pre Collabora
+    - name: Set WOPI URL for Collabora
       ansible.builtin.command:
         cmd: "docker exec -u www-data {{ nextcloud_container_name }} php occ config:app:set richdocuments wopi_url --value='{{ nextcloud_collabora_url }}'"
       when: nc_wopi_url.stdout | trim != nextcloud_collabora_url
-      # Táto úloha mení konfiguráciu v databáze, ak nesedí URL:
       changed_when: true
 
-- name: "Spustenie opravy a migrácie mimetype databázy (Manuálna údržba)"
+- name: "Deployment of fixes and migration of mimetype database (Manual maintanance)"
   ansible.builtin.command:
     cmd: "docker exec -u www-data {{ nextcloud_container_name }} php occ maintenance:repair --include-expensive"
   when: nextcloud_run_repair | bool
-  # Údržba a oprava databázy mení záznamy v systéme:
   changed_when: true
   tags:
     - never
