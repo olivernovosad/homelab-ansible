@@ -48,3 +48,4 @@ terraform.rc
 *.tfvars.json
 !*.example.tfvars
 ansible/inventories/prod.ini
+repo_context.txt
