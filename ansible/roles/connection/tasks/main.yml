@@ -1,5 +1,5 @@
 ---
-- name: Uisti sa, že externé siete existujú
+- name: Ensure external networks exist
   community.docker.docker_network:
     name: "{{ item }}"
     state: present
@@ -7,7 +7,7 @@
     - proxy_net
     - tunnel_net
 
-- name: Spusti Nginx Proxy Manager (npm)
+- name: Start Nginx Proxy Manager (npm)
   community.docker.docker_container:
     name: npm
     image: "{{ npm_image }}"
@@ -23,7 +23,7 @@
     networks:
       - name: proxy_net
 
-- name: Spusti Cloudflare Tunnel (cloudflared)
+- name: Start Cloudflare Tunnel (cloudflared)
   community.docker.docker_container:
     name: cloudflared
     image: "{{ cloudflared_image }}"

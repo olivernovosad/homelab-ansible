@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# 1. Ak beží v CI alebo máš nastavenú premennú, použi ju
+# 1. Running in CI or the env var is already set: use it
 if [ -n "${ANSIBLE_VAULT_PASSWORD:-}" ]; then
   echo "$ANSIBLE_VAULT_PASSWORD"
   exit 0
 fi
 
-# 2. Lokálny vývoj: načítanie z systémovej kľúčenky
+# 2. Local development: read from the OS keyring
 if command -v secret-tool &> /dev/null; then
   secret-tool lookup ansible vault
   exit 0

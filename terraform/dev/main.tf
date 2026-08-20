@@ -7,6 +7,11 @@ terraform {
   }
 }
 
+# NOTE: local state only, no remote backend/locking configured.
+# Acceptable for a single-operator homelab; in a team setting this would move
+# to a remote backend (e.g. S3 + DynamoDB lock, or Terraform Cloud) to avoid
+# state file conflicts and enable collaboration.
+
 provider "libvirt" {
   uri = "qemu:///system"
 }
@@ -15,8 +20,8 @@ resource "libvirt_volume" "ubuntu_base" {
   name   = "ubuntu-24.04-base.qcow2"
   pool   = "default"
   format = "qcow2"
-  
-  # Namiesto /current/ používame presný statický release.
+
+  # Pinned to a specific static release instead of /current/ for reproducibility.
   source = "https://cloud-images.ubuntu.com/releases/24.04/release-20240423/ubuntu-24.04-server-cloudimg-amd64.img"
 }
 
@@ -86,7 +91,7 @@ resource "local_file" "ansible_inventory" {
     staging-vm ansible_host=${libvirt_domain.staging_node.network_interface[0].addresses[0]} ansible_user=ubuntu
 
     [staging:vars]
-    # Vypne kontrolu kľúčov IBA pre dočasnú testovaciu VM v KVM
+    # Disables host key checking ONLY for this temporary KVM test VM
     ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
   EOT
   filename = "${path.module}/../../ansible/inventories/dev.ini"

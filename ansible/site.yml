@@ -1,14 +1,14 @@
 ---
-- name: Kompletná správa, hardening a nasadenie Homelabu
+- name: Complete homelab management, hardening and deployment
   hosts: "{{ target_hosts | default('staging') }}"
   become: true
 
   roles:
-    - bootstrap        # Zabezpečenie OS, UFW, Sysctl, Docker Engine
-    - system           # Watchtower, Crowdsec, Autoheal, Kopia zálohy
-    - connection       # Nginx Proxy Manager, Cloudflared Tunnel
-    - vaultwarden      # Správa hesiel
+    - bootstrap        # OS hardening, UFW, sysctl, Docker Engine
+    - system           # Watchtower, CrowdSec, Autoheal, Kopia backups
+    - connection       # Nginx Proxy Manager, Cloudflare Tunnel
+    - vaultwarden      # Password manager
     - nextcloud        # Nextcloud AIO
-    - media            # Jellyfin, Torrenty, Gluetun VPN, *arr stack
+    - media            # Jellyfin, torrents, Gluetun VPN, *arr stack
     - monitoring       # Grafana, Prometheus, Node Exporter, cAdvisor
     - foundry          # Foundry VTT
