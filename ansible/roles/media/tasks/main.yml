@@ -109,7 +109,6 @@
       TZ: "{{ timezone }}"
     volumes:
       - "{{ appdata_path }}/prowlarr:/config"
-      - "{{ appdata_path }}/prowlarr"
     networks:
       - name: media_net
       - name: torrent_net

@@ -26,5 +26,5 @@ jobs:
 
       - name: Run Ansible Lint
         env:
-          ANSIBLE_VAULT_PASSWORD: ${{ secrets.VAULT_PASSWORD }}
+          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
         run: ansible-lint ansible/site.yml
