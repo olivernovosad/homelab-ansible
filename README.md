@@ -77,7 +77,7 @@ Traffic is split by trust boundary into isolated Docker networks:
 Rather than list every tool, here's the *reasoning* behind the choices that matter most on review:
 
 - **No secrets in plaintext.** All sensitive values live in `ansible-vault`-encrypted `vault.yml`; the vault password is resolved via `get-vault-pass.sh` (env var in CI, OS keyring locally) — same script, both environments.
-- **Docker socket is never mounted directly.** Watchtower and cAdvisor talk to a `tecnativa/docker-socket-proxy` container with a locked-down permission set (no `POST`, `BUILD`, `EXEC`, `DELETE`) instead of `/var/run/docker.sock`.
+- **Docker socket is never mounted directly.** Watchtower talks to a `tecnativa/docker-socket-proxy` container with a locked-down permission set (no `POST`, `BUILD`, `EXEC`, `DELETE`) instead of `/var/run/docker.sock`. cAdvisor runs privileged with direct docker.sock/cgroup access, per the upstream-recommended deployment — its metrics model requires this and isn't compatible with the read-only docker-socket-proxy pattern used elsewhere. It's isolated on the monitoring network with no other services depending on that access.
 - **VPN kill-switch for torrent traffic.** qBittorrent shares Gluetun's network namespace (`network_mode: container:gluetun`) — if the VPN drops, the download client loses connectivity entirely rather than falling back to the host's real IP.
 - **Admin UIs bound to loopback.** Nginx Proxy Manager's admin panel, Kopia's web UI, and the `*arr` dashboards are published on `127.0.0.1` only, not the LAN interface.
 - **Host hardening.** UFW default-deny inbound, SSH restricted to key-based auth with `PermitRootLogin no`, kernel `sysctl` hardening (SYN cookies, disabled ICMP redirects).
@@ -180,5 +180,5 @@ Deliberate, documented trade-offs rather than oversights:
 
 Self-taught in DevOps/sysadmin practices, currently working as a Support Associate. Background in front-end development (AP Degree, Multimedia Design, IBA — Denmark). Looking for a junior/mid-level DevOps or SysAdmin role.
 
-- LinkedIn: [add link]
-- Email: [add contact]
+- LinkedIn: [www.linkedin.com/in/oliver-novosád-59a135223]
+- Email: [oliver.novosad@gmail.com]
