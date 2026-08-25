@@ -45,7 +45,6 @@ flowchart TB
     NPM -->|proxy_net| NC[Nextcloud]
     NPM -->|proxy_net| JF[Jellyfin]
 
-    NC --> MEDIA_NET[media_net]
     JF --> MEDIA_NET
     MEDIA_NET --> ARR[*arr stack: Radarr/Sonarr/Lidarr/Bazarr]
     MEDIA_NET --> PRWL[Prowlarr]
