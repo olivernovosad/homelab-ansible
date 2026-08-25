@@ -14,6 +14,7 @@ vault_foundry_admin_key: "changeme"
 
 vault_nextcloud_password: "changeme"
 vault_nextcloud_db_password: "changeme"
+vault_nextcloud_domain: "changeme"
 
 vault_wireguard_private_key: "changeme"
 vault_wireguard_addresses: "changeme"

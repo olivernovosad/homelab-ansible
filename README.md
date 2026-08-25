@@ -1,9 +1,9 @@
 # 🚀 Gaia Homelab — Infrastructure as Code
 
-[![Ansible Lint](https://img.shields.io/github/actions/workflow/status/<user>/<repo>/ansible-lint.yml?label=ansible-lint)](../../actions)
-[![Terraform CI](https://img.shields.io/github/actions/workflow/status/<user>/<repo>/terraform.yml?label=terraform)](../../actions)
-[![Secret Scan](https://img.shields.io/github/actions/workflow/status/<user>/<repo>/secret-scan.yml?label=gitleaks)](../../actions)
-[![Security Scan](https://img.shields.io/github/actions/workflow/status/<user>/<repo>/security-scan.yml?label=trivy)](../../actions)
+[![Ansible Lint](https://img.shields.io/github/actions/workflow/status/olivernovosad/homelab-ansible/ansible-lint.yml?label=ansible-lint)](../../actions)
+[![Terraform CI](https://img.shields.io/github/actions/workflow/status/olivernovosad/homelab-ansible/terraform.yml?label=terraform)](../../actions)
+[![Secret Scan](https://img.shields.io/github/actions/workflow/status/olivernovosad/homelab-ansible/secret-scan.yml?label=gitleaks)](../../actions)
+[![Security Scan](https://img.shields.io/github/actions/workflow/status/olivernovosad/homelab-ansible/security-scan.yml?label=trivy)](../../actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 > End-to-end Infrastructure as Code for a self-hosted homelab: **Ansible** for configuration management, **Terraform + libvirt/KVM** for a disposable staging environment, and a full **CI/CD pipeline** (lint, syntax check, secret scanning, config security scanning) — built and run solo, no prior professional ops experience.
@@ -180,5 +180,5 @@ Deliberate, documented trade-offs rather than oversights:
 
 Self-taught in DevOps/sysadmin practices, currently working as a Support Associate. Background in front-end development (AP Degree, Multimedia Design, IBA — Denmark). Looking for a junior/mid-level DevOps or SysAdmin role.
 
-- LinkedIn: [www.linkedin.com/in/oliver-novosád-59a135223]
-- Email: [oliver.novosad@gmail.com]
+- LinkedIn: [linkedin.com/in/oliver-novosád-59a135223](https://www.linkedin.com/in/oliver-novosad-59a135223)
+- Email: oliver.novosad@gmail.com

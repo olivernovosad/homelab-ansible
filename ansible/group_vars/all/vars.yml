@@ -25,3 +25,4 @@ base_packages:
 # Storage path management
 storage_ssd_path: "/mnt/ssd"
 storage_hdd_path: "/mnt/hdd8T"
+nextcloud_domain: "{{ vault_nextcloud_domain }}"
