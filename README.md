@@ -1,4 +1,4 @@
-# 🚀 Gaia Homelab — Infrastructure as Code
+# Gaia Homelab — Infrastructure as Code
 
 [![Ansible Lint](https://img.shields.io/github/actions/workflow/status/olivernovosad/homelab-ansible/ansible-lint.yml?label=ansible-lint)](../../actions)
 [![Terraform CI](https://img.shields.io/github/actions/workflow/status/olivernovosad/homelab-ansible/terraform.yml?label=terraform)](../../actions)
@@ -6,7 +6,7 @@
 [![Security Scan](https://img.shields.io/github/actions/workflow/status/olivernovosad/homelab-ansible/security-scan.yml?label=trivy)](../../actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-> End-to-end Infrastructure as Code for a self-hosted homelab: **Ansible** for configuration management, **Terraform + libvirt/KVM** for a disposable staging environment, and a full **CI/CD pipeline** (lint, syntax check, secret scanning, config security scanning) — built and run solo, no prior professional ops experience.
+> This is my home server, managed entirely through Ansible and Terraform instead of manual setup. I built it to practice the workflows I'd actually use in a DevOps/SysAdmin role — idempotent config, secrets handling, CI gating, staging before prod — while learning the field on my own.
 
 ---
 
@@ -163,11 +163,13 @@ Copy `ansible/inventories/prod.ini.example` to `prod.ini` and fill in your own h
 
 ## Lessons learned / trade-offs
 
-Deliberate, documented trade-offs rather than oversights:
+A few decisions here are trade-offs I made consciously, not things I overlooked:
 
-- **Most images run on `:latest` with Watchtower auto-updating them.** Great for a single-operator homelab, non-reproducible for a real production fleet — in a team setting I'd pin versions and stage updates instead.
-- **Terraform state is local, no remote backend/locking.** Fine for a single contributor; would move to a remote backend (S3/Terraform Cloud) with locking for anything collaborative.
-- **Kopia backup runs as root inside its container** to read appdata owned by multiple UIDs across services — a narrower, per-service backup permission model is on the list.
+Most images run on `:latest` with Watchtower auto-updating them. That's convenient for a single-operator homelab, but I'm aware it's non-reproducible — a container can pull a breaking change overnight with no warning. In a team/production setting I'd pin versions and roll out updates deliberately instead of letting them apply themselves.
+
+Terraform state is kept local, with no remote backend or locking. That's fine as long as I'm the only one touching this infrastructure, but it wouldn't hold up with more than one contributor — I'd move to a remote backend (S3 + DynamoDB lock, or Terraform Cloud) the moment that changed.
+
+Kopia's backup container runs as root. It needs to read appdata directories owned by a different UID per service (Nextcloud, Prometheus, the *arr stack, etc.), and giving it root was simpler than maintaining a per-service permission matrix. A narrower setup is on my list, just not urgent for a single-host backup job.
 
 ## Roadmap
 
