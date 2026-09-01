@@ -181,5 +181,5 @@ Kopia's backup container runs as root. It needs to read appdata directories owne
 
 Self-taught in DevOps/sysadmin practices, currently working as a Support Associate. Background in front-end development (AP Degree, Multimedia Design, IBA — Denmark). Looking for a junior/mid-level DevOps or SysAdmin role.
 
-- LinkedIn: [linkedin.com/in/oliver-novosád-59a135223](https://www.linkedin.com/in/oliver-novosad-59a135223)
+- LinkedIn: https://www.linkedin.com/in/oliver-novos%C3%A1d-59a135223/
 - Email: oliver.novosad@gmail.com
