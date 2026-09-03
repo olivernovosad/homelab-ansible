@@ -1,0 +1,6 @@
+[Unit]
+Description=Pull Kopia backup repo from optiplex
+
+[Service]
+Type=oneshot
+ExecStart=%h/kopia-pull.sh

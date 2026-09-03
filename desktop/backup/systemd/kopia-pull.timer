@@ -1,0 +1,10 @@
+[Unit]
+Description=Periodically try to pull Kopia backup from optiplex
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
