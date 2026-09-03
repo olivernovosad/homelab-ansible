@@ -14,6 +14,7 @@
 - [Why this project exists](#why-this-project-exists)
 - [Architecture](#architecture)
 - [Security design decisions](#security-design-decisions)
+- [Backup & Disaster Recovery](#backup--disaster-recovery)
 - [Tech stack](#tech-stack)
 - [Repository structure](#repository-structure)
 - [CI/CD pipeline](#cicd-pipeline)
@@ -82,6 +83,24 @@ Rather than list every tool, here's the *reasoning* behind the choices that matt
 - **Host hardening.** UFW default-deny inbound, SSH restricted to key-based auth with `PermitRootLogin no`, kernel `sysctl` hardening (SYN cookies, disabled ICMP redirects).
 - **CrowdSec** ingests Nginx/system logs and blocks malicious request patterns in near real time.
 
+## Backup & Disaster Recovery
+
+Backups follow a 3-2-1 strategy:
+
+1. **Primary**: Kopia takes nightly snapshots (app-data, Nextcloud files, a
+   logical `pg_dump` of the Nextcloud database, and compose stacks) to a
+   second physical disk on the homelab host.
+2. **Offsite copy**: A dedicated, read-only `backuppull` account (SSH key
+   restricted via `rrsync`, forced command, no shell access) lets a
+   separate desktop machine pull the Kopia repository hourly via a
+   systemd user timer — regardless of whether the desktop is on 24/7.
+3. **Cold copy**: A manual script mirrors the desktop copy to an external
+   drive, kept as an air-gapped last resort.
+
+The Nextcloud database is dumped logically (`pg_dump`) before each backup
+run rather than copying the live Postgres data directory, to guarantee a
+consistent, restorable snapshot.
+
 ## Tech stack
 
 | Layer | Tools |
@@ -92,6 +111,7 @@ Rather than list every tool, here's the *reasoning* behind the choices that matt
 | Reverse proxy / ingress | Nginx Proxy Manager, Cloudflare Tunnel |
 | Monitoring | Prometheus, Grafana, Node Exporter, cAdvisor |
 | Security | UFW, CrowdSec, Docker Socket Proxy, Gitleaks, Trivy |
+| Backup | rsync, systemd timers |
 | CI/CD | GitHub Actions |
 
 ## Repository structure
