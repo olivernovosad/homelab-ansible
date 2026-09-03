@@ -108,9 +108,120 @@
       - "{{ appdata_path }}:/app-data:ro"
       - /opt/docker/compose-stacks:/stacks:ro
       - "{{ storage_hdd_path | default('/mnt/hdd8T') }}/backups/kopia:/repository"
-      - "{{ storage_ssd_path | default('/mnt/ssd') }}/nextcloud-data:/nextcloud-data:ro"
+      - "/var/lib/docker/volumes/nextcloud_nextcloud_data/_data:/nextcloud-data:ro"
+      - "{{ nextcloud_dir | default('/opt/nextcloud') }}/db-dumps:/nextcloud-db-dump:ro"
       - "{{ appdata_path }}/kopia/config:/app/config"
       - "{{ appdata_path }}/kopia/cache:/app/cache"
+
+# ===========================================================================
+# KOPIA - Automatic initialization of repositories, policies and snapshot sources
+# This substitues manual setup in web UI.
+# ===========================================================================
+
+- name: Wait until Kopia runs
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 51515
+    timeout: 30
+
+- name: Check if repository is connected
+  ansible.builtin.command:
+    cmd: docker exec kopia kopia repository status
+  register: kopia_repo_status
+  changed_when: false
+  failed_when: false
+
+- name: Connect to the existing repository (if it is present on the disc, but the client is not connected)
+  ansible.builtin.command:
+    cmd: docker exec kopia kopia repository connect filesystem --path=/repository
+  when: kopia_repo_status.rc != 0
+  register: kopia_connect
+  changed_when: kopia_connect.rc == 0
+  failed_when: false
+
+- name: Create new repository (if it does not exist at all - initial bootstrap)
+  ansible.builtin.command:
+    cmd: docker exec kopia kopia repository create filesystem --path=/repository
+  when: kopia_repo_status.rc != 0 and kopia_connect.rc != 0
+  changed_when: true
+
+- name: Set global retention policy
+  ansible.builtin.command:
+    cmd: >
+      docker exec kopia kopia policy set --global
+      --keep-latest=3 --keep-hourly=3 --keep-daily=7
+      --keep-weekly=4 --keep-monthly=4 --keep-annual=1
+      --compression=zstd
+  changed_when: false
+
+- name: Create and set a schedule for each snapshot source
+  ansible.builtin.command:
+    cmd: >
+      docker exec kopia kopia policy set {{ item }} --snapshot-time=02:00
+  loop:
+    - /app-data
+    - /nextcloud-data
+    - /nextcloud-db-dump
+    - /stacks
+  changed_when: false
+
+- name: Check if snapshot sources are already registered
+  ansible.builtin.command:
+    cmd: docker exec kopia kopia snapshot list --all
+  register: kopia_existing_snapshots
+  changed_when: false
+
+- name: Deploy initial snapshot for each source (Create it if it does not exist yet)
+  ansible.builtin.command:
+    cmd: docker exec kopia kopia snapshot create {{ item }}
+  loop:
+    - /app-data
+    - /nextcloud-data
+    - /nextcloud-db-dump
+    - /stacks
+  when: item not in kopia_existing_snapshots.stdout
+  changed_when: true
+
+- name: Create group for read access to Kopia backups
+  ansible.builtin.group:
+    name: "{{ kopia_backup_group }}"
+    state: present
+
+- name: Create dedicated read-only backup-puller user
+  ansible.builtin.user:
+    name: backuppull
+    system: true
+    shell: /bin/sh
+    groups: "{{ kopia_backup_group }}"
+    append: true
+    create_home: true
+
+- name: Ensure .ssh directory exists for backuppull
+  ansible.builtin.file:
+    path: /home/backuppull/.ssh
+    state: directory
+    owner: backuppull
+    group: backuppull
+    mode: '0700'
+
+- name: Authorize desktop's key, restricted via rrsync (read-only) to the backup dir
+  ansible.builtin.copy:
+    dest: /home/backuppull/.ssh/authorized_keys
+    content: >
+      command="{{ rrsync_path }} -ro {{ storage_hdd_path | default('/mnt/hdd8T') }}/backups/kopia/",restrict
+      {{ desktop_ssh_pubkey }}
+    owner: backuppull
+    group: backuppull
+    mode: '0600'
+
+- name: Allow backuppull read access to the backup directory
+  ansible.builtin.acl:
+    path: "{{ storage_hdd_path | default('/mnt/hdd8T') }}/backups/kopia"
+    entity: backuppull
+    etype: user
+    permissions: rX
+    recursive: true
+    state: present
 
 # ===========================================================================
 # Automatic system maintenance and security updates

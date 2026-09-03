@@ -49,3 +49,4 @@ terraform.rc
 !*.example.tfvars
 ansible/inventories/prod.ini
 repo_context.txt
+repomix-output.xml

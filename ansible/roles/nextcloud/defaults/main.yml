@@ -1,4 +1,7 @@
 ---
+# --- BACKUP ---
+nextcloud_db_dump_dir: "{{ nextcloud_dir }}/db-dumps"
+
 # --- PATHS & CONTAINER CONFIG ---
 nextcloud_dir: "/opt/nextcloud"
 nextcloud_container_name: "nextcloud-app"

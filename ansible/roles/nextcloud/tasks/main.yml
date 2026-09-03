@@ -10,6 +10,25 @@
     - "{{ nextcloud_dir }}"
     - "{{ nextcloud_dir }}/config"
 
+- name: "Create Nextcloud directory for DB dumps"
+  ansible.builtin.file:
+    path: "{{ nextcloud_db_dump_dir }}"
+    state: directory
+    owner: "33"
+    group: "33"
+    mode: '0700'
+
+- name: "Deployment of cron job for night pgdump (before Kopia run at 2:00)"
+  ansible.builtin.cron:
+    name: "Nextcloud DB dump pre zálohu"
+    minute: "45"
+    hour: "1"
+    user: root
+    job: >
+      docker exec nextcloud-db pg_dump -U {{ nextcloud_db_user }} {{ nextcloud_db_name }}
+      | gzip > {{ nextcloud_db_dump_dir }}/nextcloud-db-$(date +\%Y\%m\%d).sql.gz
+      && find {{ nextcloud_db_dump_dir }} -name '*.sql.gz' -mtime +7 -delete
+
 - name: Create .env file for Docker Compose credentials
   ansible.builtin.template:
     src: env.j2
