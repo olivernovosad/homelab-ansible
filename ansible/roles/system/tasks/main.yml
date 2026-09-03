@@ -215,7 +215,7 @@
     mode: '0600'
 
 - name: Allow backuppull read access to the backup directory
-  ansible.builtin.acl:
+  ansible.posix.acl:
     path: "{{ storage_hdd_path | default('/mnt/hdd8T') }}/backups/kopia"
     entity: backuppull
     etype: user
