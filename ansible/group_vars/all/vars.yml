@@ -10,7 +10,10 @@ timezone: "Europe/Bratislava"
 # Network settings
 lan_subnet: "192.168.0.0/24"
 docker_subnet: "172.16.0.0/12"
-
+desktop_ssh_pubkey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIfnFT7ei0El3EbfGxNej7GvcpW95X06muO1L57XvxO+ anthropos@fedora"
+kopia_backup_group: "kopiaread"
+desktop_backup_host: "192.168.0.103" #It is a LAN IP. Showing local topology is not too dangerous but not tasteful. Will fix later.
+rrsync_path: "/usr/bin/rrsync"
 # System packages for bootstrap
 base_packages:
   - qemu-guest-agent
