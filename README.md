@@ -192,10 +192,23 @@ Kopia's backup container runs as root. It needs to read appdata directories owne
 
 ## Roadmap
 
-- [ ] Pin container image versions; move to scheduled, reviewed updates
-- [ ] Remote Terraform backend with state locking
-- [ ] Molecule tests for Ansible roles
+- [ ] Validate backups with a real restore drill (Kopia snapshot → fresh
+      restore of Vaultwarden, Foundry, and Nextcloud)
+- [ ] Set explicit CPU/memory resource limits on all containers — also
+      direct prep for Kubernetes `resources.requests/limits`
 - [ ] Alertmanager rules on top of the existing Prometheus/Grafana stack
+- [ ] Centralized logging (Loki + Promtail) alongside existing monitoring
+- [ ] Migrate homelab services to k3s, starting single-node on the
+      existing host, then evaluating additional nodes
+- [x] ~~Molecule tests for Ansible roles~~ — deprioritized: most roles will
+      be replaced by Kubernetes manifests/Helm charts during the k3s
+      migration, so testing investment will target that layer instead
+- [ ] Pin image versions for stateful/critical services (Vaultwarden,
+      Nextcloud, Postgres) ahead of full migration; broader version
+      pinning is deferred to Kubernetes, where it's inherent to how
+      deployments are declared
+- [ ] Remote Terraform backend with state locking (low priority — revisit
+      if collaborating with others)
 
 ## About me
 
