@@ -43,7 +43,7 @@ resource "libvirt_cloudinit_disk" "commoninit" {
         sudo: ALL=(ALL) NOPASSWD:ALL
         shell: /bin/bash
         ssh_authorized_keys:
-          - ${file("~/.ssh/id_rsa.pub")}
+          - ${file(pathexpand(var.ssh_public_key_path))}
   EOT
 
   meta_data = <<-EOT
