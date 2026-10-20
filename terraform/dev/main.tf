@@ -86,13 +86,13 @@ output "staging_ip" {
 }
 
 resource "local_file" "ansible_inventory" {
-  content  = <<-EOT
+  content         = <<-EOT
     [staging]
     staging-vm ansible_host=${try(libvirt_domain.staging_node.network_interface[0].addresses[0], "127.0.0.1")} ansible_user=ubuntu
     [staging:vars]
     # Disables host key checking ONLY for this temporary KVM test VM
     ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
   EOT
-  filename = "${path.module}/../../ansible/inventories/dev.ini"
+  filename        = "${path.module}/../../ansible/inventories/dev.ini"
   file_permission = "0644"
 }
