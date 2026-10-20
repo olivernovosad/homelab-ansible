@@ -29,7 +29,7 @@ resource "libvirt_volume" "staging_disk" {
   name           = "staging-node-disk.qcow2"
   base_volume_id = libvirt_volume.ubuntu_base.id
   pool           = "default"
-  size           = 21474836480 # 20 GB
+  size           = 53687091200 # 50 GB
 }
 
 resource "libvirt_cloudinit_disk" "commoninit" {
