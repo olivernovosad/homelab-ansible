@@ -1,5 +1,9 @@
 name: "Terraform CI"
 on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'terraform/**'
   pull_request:
     paths:
       - 'terraform/**'
@@ -9,13 +13,13 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./terraform
+        working-directory: ./terraform/dev
     steps:
-      - uses: actions/checkout@v3
-      - uses: hashicorp/setup-terraform@v2
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
 
       - name: Terraform Format
-        run: terraform fmt -check
+        run: terraform fmt -check -recursive
 
       - name: Terraform Init
         run: terraform init -backend=false

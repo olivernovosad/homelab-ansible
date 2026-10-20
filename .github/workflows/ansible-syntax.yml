@@ -31,6 +31,8 @@ jobs:
         run: chmod +x ./get-vault-pass.sh
 
       - name: Check Playbook Syntax
-        run: ansible-playbook site.yml --syntax-check
+        run: |
+          ansible-playbook site.yml --syntax-check
+          ansible-playbook restore-verify.yml --syntax-check
         env:
           ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
