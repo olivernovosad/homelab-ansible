@@ -25,6 +25,7 @@
     hour: "1"
     user: root
     job: >
+      set -o pipefail;
       docker exec nextcloud-db pg_dump -U {{ nextcloud_db_user }} {{ nextcloud_db_name }}
       | gzip > {{ nextcloud_db_dump_dir }}/nextcloud-db-$(date +\%Y\%m\%d).sql.gz
       && find {{ nextcloud_db_dump_dir }} -name '*.sql.gz' -mtime +7 -delete
