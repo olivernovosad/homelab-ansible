@@ -94,4 +94,5 @@ resource "local_file" "ansible_inventory" {
     ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
   EOT
   filename = "${path.module}/../../ansible/inventories/dev.ini"
+  file_permission = "0644"
 }

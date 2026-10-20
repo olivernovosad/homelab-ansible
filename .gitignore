@@ -50,3 +50,4 @@ terraform.rc
 ansible/inventories/prod.ini
 repo_context.txt
 repomix-output.xml
+ansible/inventories/dev.ini
