@@ -10,6 +10,9 @@ jobs:
   lint:
     name: Run ansible-lint
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./ansible
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -24,7 +27,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install ansible ansible-lint
 
+      - name: Install required Ansible collections
+        run: ansible-galaxy collection install -r requirements.yml
+
       - name: Run Ansible Lint
         env:
           ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
-        run: ansible-lint ansible/site.yml
+        run: ansible-lint site.yml
