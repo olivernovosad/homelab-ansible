@@ -21,3 +21,8 @@ vault_wireguard_addresses: "changeme"
 vault_server_countries: "changeme"
 
 vault_kopia_password: "changeme"
+
+vault_b2_key_id: "changeme"
+vault_b2_application_key: "changeme"
+vault_b2_bucket_name: "changeme"
+vault_b2_endpoint: "changeme"

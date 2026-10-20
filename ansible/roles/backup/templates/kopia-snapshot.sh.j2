@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Managed by Ansible - DO NOT EDIT
+set -uo pipefail
+
+SOURCES=(
+  "/app-data"
+  "/nextcloud-data"
+  "/nextcloud-db-dump"
+  "/nextcloud-config"
+)
+
+LOG_DIR="{{ appdata_path }}/kopia/logs"
+LOG_FILE="${LOG_DIR}/snapshot-$(date +%Y%m%d-%H%M%S).log"
+METRICS_DIR="{{ kopia_textfile_metrics_dir }}"
+METRICS_FILE="${METRICS_DIR}/kopia_backup.prom"
+METRICS_TMP="${METRICS_FILE}.$$.tmp"
+
+mkdir -p "$LOG_DIR" "$METRICS_DIR"
+
+fail_count=0
+{
+  echo "=== Kopia snapshot run: $(date -Iseconds) ==="
+  for source in "${SOURCES[@]}"; do
+    echo "--- ${source} ---"
+    if docker exec kopia kopia snapshot create "${source}" --log-level=error; then
+      echo "${source}: OK"
+    else
+      echo "${source}: FAILED"
+      fail_count=$((fail_count + 1))
+    fi
+  done
+
+  echo "--- B2 offsite sync ---"
+  if docker exec kopia kopia repository sync-to s3 \
+      --bucket={{ vault_b2_bucket_name }} \
+      --endpoint={{ vault_b2_endpoint }} \
+      --access-key={{ vault_b2_key_id }} \
+      --secret-access-key={{ vault_b2_application_key }} \
+      --delete; then
+    echo "B2 offsite sync: OK"
+  else
+    echo "B2 offsite sync: FAILED"
+    fail_count=$((fail_count + 1))
+  fi
+
+  echo "=== Done: $((5 - fail_count))/5 steps OK ==="
+} >> "$LOG_FILE" 2>&1
+
+{
+  echo "# HELP kopia_backup_last_run_timestamp_seconds Unix time of the last snapshot run attempt"
+  echo "# TYPE kopia_backup_last_run_timestamp_seconds gauge"
+  echo "kopia_backup_last_run_timestamp_seconds $(date +%s)"
+  echo "# HELP kopia_backup_last_run_failures Number of failed steps (sources + B2 sync) in the last run"
+  echo "# TYPE kopia_backup_last_run_failures gauge"
+  echo "kopia_backup_last_run_failures ${fail_count}"
+} > "$METRICS_TMP"
+mv "$METRICS_TMP" "$METRICS_FILE"
+
+find "$LOG_DIR" -name '*.log' -mtime +14 -delete
+exit "$fail_count"

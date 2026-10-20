@@ -101,6 +101,7 @@ The Nextcloud database is dumped logically (`pg_dump`) before each backup
 run rather than copying the live Postgres data directory, to guarantee a
 consistent, restorable snapshot.
 
+Snapshot creation is triggered by a host-level cron job rather than Kopia's built-in scheduler, which proved unreliable for CLI-managed sources in headless mode; each run reports a Prometheus metric consumed by the existing Grafana stack.
 ## Tech stack
 
 | Layer | Tools |

@@ -1,0 +1,164 @@
+---
+# ===========================================================================
+# This role owns the backup chain: Kopia (on-host, TLS-secured server), the
+# host-level cron trigger that replaces Kopia's unreliable internal
+# scheduler, and a Backblaze B2 offsite mirror synced nightly via Kopia's
+# own sync-to. No second local reader of the repository exists, so there is
+# no OS-level permission model to maintain here (a Raspberry Pi target may
+# be added later as a third copy — deferred for now).
+#
+# Runs LAST in site.yml: Kopia bind-mounts real host paths created by other
+# roles (Nextcloud's volume, its db-dump dir), so they already exist by the
+# time Kopia mounts them.
+# ===========================================================================
+
+- name: Create directories for Kopia
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ appdata_path }}/kopia/config"
+    - "{{ appdata_path }}/kopia/cache"
+    - "{{ appdata_path }}/kopia/logs"
+    - "{{ storage_hdd_path | default('/mnt/hdd8T') }}/restore-drill"
+
+# ===========================================================================
+# TLS — self-signed cert, generated once via openssl (not kopia's own
+# --tls-generate-cert, which can't be safely re-run through Ansible).
+# ===========================================================================
+- name: Generate Kopia server private key (idempotent)
+  ansible.builtin.command:
+    cmd: "openssl genrsa -out {{ appdata_path }}/kopia/config/kopia.key 4096"
+    creates: "{{ appdata_path }}/kopia/config/kopia.key"
+
+- name: Generate self-signed Kopia server certificate (idempotent, 10y validity)
+  ansible.builtin.command:
+    cmd: >
+      openssl req -new -x509 -key {{ appdata_path }}/kopia/config/kopia.key
+      -out {{ appdata_path }}/kopia/config/kopia.cert
+      -days 3650 -subj "/CN=gaia-server"
+    creates: "{{ appdata_path }}/kopia/config/kopia.cert"
+
+- name: Lock down the private key
+  ansible.builtin.file:
+    path: "{{ appdata_path }}/kopia/config/kopia.key"
+    mode: '0600'
+
+# ===========================================================================
+# KOPIA - Backup server
+# ===========================================================================
+- name: Deploy Kopia Backup Server container
+  community.docker.docker_container:
+    name: kopia
+    image: kopia/kopia:latest
+    hostname: gaia-server
+    user: "0:0"   # reads appdata for every service, owned by different UIDs per service
+    state: started
+    restart_policy: unless-stopped
+    published_ports:
+      - "127.0.0.1:51515:51515"
+    env:
+      KOPIA_PASSWORD: "{{ vault_kopia_password }}"
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "exec kopia server start
+      --tls-cert-file=/app/config/kopia.cert
+      --tls-key-file=/app/config/kopia.key
+      --address=0.0.0.0:51515
+      --server-username=admin --server-password=$KOPIA_PASSWORD"
+    volumes:
+      - "{{ appdata_path }}:/app-data:ro"
+      - "{{ storage_hdd_path | default('/mnt/hdd8T') }}/backups/kopia:/repository"
+      - "/var/lib/docker/volumes/nextcloud_nextcloud_data/_data:/nextcloud-data:ro"
+      - "{{ nextcloud_dir | default('/opt/nextcloud') }}/db-dumps:/nextcloud-db-dump:ro"
+      - "{{ nextcloud_dir | default('/opt/nextcloud') }}/config:/nextcloud-config:ro"
+      - "{{ appdata_path }}/kopia/config:/app/config"
+      - "{{ appdata_path }}/kopia/cache:/app/cache"
+      - "{{ storage_hdd_path | default('/mnt/hdd8T') }}/restore-drill:/restore"
+
+- name: Wait until Kopia runs
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 51515
+    timeout: 30
+
+- name: Check if repository is connected
+  ansible.builtin.command:
+    cmd: docker exec kopia kopia repository status
+  register: kopia_repo_status
+  changed_when: false
+  failed_when: false
+
+- name: Connect to the existing repository (if present on disk, client just not connected)
+  ansible.builtin.command:
+    cmd: docker exec kopia kopia repository connect filesystem --path=/repository
+  when: kopia_repo_status.rc != 0
+  register: kopia_connect
+  changed_when: kopia_connect.rc == 0
+  failed_when: false
+
+- name: Create new repository (first-ever bootstrap)
+  ansible.builtin.command:
+    cmd: docker exec kopia kopia repository create filesystem --path=/repository
+  when: kopia_repo_status.rc != 0 and kopia_connect.rc != 0
+  changed_when: true
+
+- name: Set global retention policy
+  ansible.builtin.command:
+    cmd: >
+      docker exec kopia kopia policy set --global
+      --keep-latest=3 --keep-hourly=3 --keep-daily=7
+      --keep-weekly=4 --keep-monthly=4 --keep-annual=1
+      --compression=zstd
+  changed_when: false
+
+- name: Check if snapshot sources are already registered
+  ansible.builtin.command:
+    cmd: docker exec kopia kopia snapshot list --all
+  register: kopia_existing_snapshots
+  changed_when: false
+
+- name: Deploy initial snapshot for each source
+  ansible.builtin.command:
+    cmd: docker exec kopia kopia snapshot create {{ item }}
+  loop:
+    - /app-data
+    - /nextcloud-data
+    - /nextcloud-db-dump
+    - /nextcloud-config
+  when: item not in kopia_existing_snapshots.stdout
+  changed_when: true
+
+# ===========================================================================
+# KOPIA - Host-level cron trigger (snapshot + B2 offsite sync, see script)
+# ===========================================================================
+- name: Deploy the Kopia snapshot trigger script
+  ansible.builtin.template:
+    src: kopia-snapshot.sh.j2
+    dest: "{{ appdata_path }}/kopia/kopia-snapshot.sh"
+    owner: root
+    group: root
+    mode: '0750'
+
+- name: Ensure PATH is available to root's cron jobs
+  ansible.builtin.cron:
+    name: PATH
+    env: true
+    value: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    user: root
+
+- name: Use bash for root's cron jobs (so pipefail works)
+  ansible.builtin.cron:
+    name: SHELL
+    env: true
+    value: /bin/bash
+    user: root
+
+- name: Schedule nightly Kopia snapshots via host cron
+  ansible.builtin.cron:
+    name: "Kopia snapshot creation for all sources"
+    minute: "0"
+    hour: "2"
+    user: root
+    job: "{{ appdata_path }}/kopia/kopia-snapshot.sh"

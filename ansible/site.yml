@@ -12,3 +12,4 @@
     - media            # Jellyfin, torrents, Gluetun VPN, *arr stack
     - monitoring       # Grafana, Prometheus, Node Exporter, cAdvisor
     - foundry          # Foundry VTT
+    - backup

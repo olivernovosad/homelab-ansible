@@ -1,6 +1,5 @@
 ---
 system_update_reboot_if_needed: false
-# Global DevOps variables for the entire server
 base_docker_path: "/opt/docker"
 appdata_path: "{{ base_docker_path }}/app-data"
 # Global settings
@@ -11,9 +10,12 @@ timezone: "Europe/Bratislava"
 lan_subnet: "192.168.0.0/24"
 docker_subnet: "172.16.0.0/12"
 desktop_ssh_pubkey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIfnFT7ei0El3EbfGxNej7GvcpW95X06muO1L57XvxO+ anthropos@fedora"
-kopia_backup_group: "kopiaread"
+kopia_offsite_group: "kopia-offsite"
+kopia_offsite_user: "kopia-offsite"
 desktop_backup_host: "192.168.0.103" #It is a LAN IP. Showing local topology is not too dangerous but not tasteful. Will fix later.
-rrsync_path: "/usr/bin/rrsync"
+# Node-exporter textfile collector dir. Written to by system/kopia-snapshot.sh,
+# read by the monitoring role's node-exporter container.
+kopia_textfile_metrics_dir: "{{ appdata_path }}/node-exporter/textfile"
 # System packages for bootstrap
 base_packages:
   - qemu-guest-agent
@@ -24,7 +26,7 @@ base_packages:
   - iotop
   - ca-certificates
   - gnupg
-
+  - acl
 # Storage path management
 storage_ssd_path: "/mnt/ssd"
 storage_hdd_path: "/mnt/hdd8T"

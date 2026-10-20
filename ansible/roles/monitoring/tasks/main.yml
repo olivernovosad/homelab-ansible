@@ -1,6 +1,6 @@
 ---
 # ===========================================================================
-# 1. DIRECTORY, CONFIGURATION, AND DOCKER NETWORK PREPARATION
+# DIRECTORY, CONFIGURATION, AND DOCKER NETWORK PREPARATION
 # ===========================================================================
 - name: Create Prometheus directories
   ansible.builtin.file:
@@ -20,6 +20,15 @@
     owner: "472"
     group: "472"
     mode: '0755'
+
+- name: Create Node Exporter textfile collector directory
+  ansible.builtin.file:
+    path: "{{ kopia_textfile_metrics_dir }}"
+    state: directory
+    mode: '0755'
+  # Written to by the system role's kopia-snapshot.sh cron job; read here by
+  # node-exporter so backup success/failure shows up as a normal Prometheus
+  # metric (kopia_backup_last_run_*) next to everything else in Grafana.
 
 - name: Create default prometheus.yml file (if it does not exist)
   ansible.builtin.copy:
@@ -50,7 +59,7 @@
     state: present
 
 # ===========================================================================
-# 2. METRICS COLLECTION - Prometheus
+# METRICS COLLECTION - Prometheus
 # ===========================================================================
 - name: Deploy Prometheus container
   community.docker.docker_container:
@@ -69,7 +78,7 @@
       - name: monitoring
 
 # ===========================================================================
-# 3. DASHBOARDS & VISUALIZATION - Grafana
+# DASHBOARDS & VISUALIZATION - Grafana
 # ===========================================================================
 - name: Deploy Grafana container
   community.docker.docker_container:
@@ -86,7 +95,7 @@
       - name: monitoring
 
 # ===========================================================================
-# 4. HOST METRICS - Node Exporter
+# HOST METRICS - Node Exporter
 # ===========================================================================
 - name: Deploy Node Exporter container
   community.docker.docker_container:
@@ -100,15 +109,17 @@
       - '--path.rootfs=/rootfs'
       - '--path.sysfs=/host/sys'
       - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($|/)'
+      - '--collector.textfile.directory=/textfile_collector'
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
       - /:/rootfs:ro
+      - "{{ kopia_textfile_metrics_dir }}:/textfile_collector:ro"
     networks:
       - name: monitoring
 
 # ===========================================================================
-# 5. CONTAINER METRICS - cAdvisor
+# CONTAINER METRICS - cAdvisor
 # ===========================================================================
 - name: Deploy cAdvisor container
   community.docker.docker_container:
