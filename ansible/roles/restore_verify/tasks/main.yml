@@ -1,0 +1,84 @@
+---
+
+- name: Default the Vaultwarden verify result to failure until proven otherwise
+  ansible.builtin.set_fact:
+    vw_verify_success: 0
+
+- name: Vaultwarden restore verification
+  block:
+    - name: Get list of Kopia snapshots for /app-data
+      ansible.builtin.command:
+        cmd: docker exec kopia kopia snapshot list /app-data --json
+      register: kopia_snapshot_list_raw
+      changed_when: false
+
+    - name: Parse the snapshot list JSON
+      ansible.builtin.set_fact:
+        kopia_snapshots: "{{ kopia_snapshot_list_raw.stdout | from_json }}"
+
+    - name: Determine the latest snapshot's root object ID
+      ansible.builtin.set_fact:
+        kopia_latest_snapshot_obj: "{{ (kopia_snapshots | sort(attribute='startTime') | last).rootEntry.obj }}"
+
+    - name: Show which snapshot will be used for this drill
+      ansible.builtin.debug:
+        msg: "Using snapshot {{ kopia_latest_snapshot_obj }} from {{ (kopia_snapshots | sort(attribute='startTime') | last).startTime }}"
+
+    - name: Clean up previous restore-drill directory (if it exists)
+      ansible.builtin.file:
+        path: "{{ restore_verify_restore_path }}/vaultwarden-drill"
+        state: absent
+
+    - name: Restore latest Vaultwarden snapshot for verification
+      ansible.builtin.command:
+        cmd: >
+          docker exec kopia kopia restore
+          {{ kopia_latest_snapshot_obj }}/vaultwarden
+          /restore/vaultwarden-drill
+      register: kopia_vw_restore_result
+      changed_when: true
+
+    - name: Copy restored SQLite files to a writable scratch location for the WAL checkpoint
+      ansible.builtin.copy:
+        src: "{{ restore_verify_restore_path }}/vaultwarden-drill/"
+        dest: "/tmp/vw-check/"
+        remote_src: true
+        mode: '0666'
+
+    - name: Run WAL checkpoint and integrity check against the copy
+      ansible.builtin.command:
+        cmd: >
+          docker run --rm --user root -v /tmp/vw-check:/data
+          {{ restore_verify_sqlite_image }}
+          sqlite3 /data/db.sqlite3
+          "PRAGMA wal_checkpoint(FULL); PRAGMA integrity_check;"
+      register: vw_integrity_result
+      changed_when: false
+      failed_when: vw_integrity_result.stdout_lines | last != "ok"
+
+    - name: Record Vaultwarden restore-verify result as a fact
+      ansible.builtin.set_fact:
+        vw_verify_success: 1
+
+  rescue:
+    - name: Log that the Vaultwarden restore verification failed
+      ansible.builtin.debug:
+        msg: "Vaultwarden restore verification FAILED — see task output above for details."
+
+  always:
+    - name: Remove scratch SQLite copy
+      ansible.builtin.file:
+        path: /tmp/vw-check
+        state: absent
+
+    - name: Write Prometheus textfile metrics for restore verification
+      ansible.builtin.copy:
+        dest: "{{ restore_verify_metrics_dir }}/restore_verify.prom"
+        content: |
+          # HELP restore_verify_vaultwarden_success Whether the last Vaultwarden restore+integrity check succeeded (1) or not (0)
+          # TYPE restore_verify_vaultwarden_success gauge
+          restore_verify_vaultwarden_success {{ vw_verify_success }}
+          # HELP restore_verify_last_run_timestamp_seconds Unix time of the last restore-verify run
+          # TYPE restore_verify_last_run_timestamp_seconds gauge
+          restore_verify_last_run_timestamp_seconds {{ ansible_facts['date_time']['epoch'] }}
+        mode: '0644'

@@ -1,0 +1,24 @@
+# --- Postgres test image, must match with nextcloud role image version ---
+restore_verify_postgres_image: "postgres:16-alpine"
+
+# --- Name of production Nextcloud DB container for runtime version check ---
+restore_verify_nextcloud_db_container: "nextcloud-db"
+
+# --- Name of one use testing postgres container ---
+restore_verify_pg_container_name: "pg-restore-drill"
+
+# --- SQLite integrity check image ---
+restore_verify_sqlite_image: "keinos/sqlite3:latest"
+
+# --- Where data is being restored for testing shared with backup role ---
+restore_verify_restore_path: "{{ storage_hdd_path | default('/mnt/hdd8T') }}/restore-drill"
+
+# --- Route to Nextcloud DB dump shared with nextcloud ---
+restore_verify_nc_dump_dir: "{{ nextcloud_db_dump_dir }}"
+
+# --- Nextcloud DB role name and database for test-restore ---
+restore_verify_nc_db_user: "{{ nextcloud_db_user }}"
+restore_verify_nc_db_name: "{{ nextcloud_db_name }}"
+
+# --- Where Prometheus writes textfile metrics shared with monitoring role ---
+restore_verify_metrics_dir: "{{ kopia_textfile_metrics_dir }}"

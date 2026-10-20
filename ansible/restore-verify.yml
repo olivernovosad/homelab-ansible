@@ -1,0 +1,5 @@
+- name: Restore verification drill
+  hosts: gaia-server
+  become: true
+  roles:
+    - restore_verify
