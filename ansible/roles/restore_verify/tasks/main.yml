@@ -43,7 +43,8 @@
         src: "{{ restore_verify_restore_path }}/vaultwarden-drill/"
         dest: "/tmp/vw-check/"
         remote_src: true
-        mode: '0666'
+        mode: '0600'
+        directory_mode: '0700'
 
     - name: Run WAL checkpoint and integrity check against the copy
       ansible.builtin.command:
