@@ -69,7 +69,7 @@ Traffic is split by trust boundary into isolated Docker networks:
 | `proxy_net` | Public-facing services routed through Nginx Proxy Manager |
 | `tunnel_net` | Services published via Cloudflare Tunnel (outbound-only connection, no router port needed) |
 | `media_net` | Media server ↔ media request/management apps |
-| `torrent_net` | Download stack — **all traffic forced through the Gluetun VPN container**, no direct internet path |
+| `torrent_net` | Download stack. qBittorrent runs inside Gluetun's network namespace (VPN kill-switch); the *arr apps on this network still reach the internet directly through Docker NAT |
 | `monitoring` | Metrics collection, isolated from application traffic |
 
 ## Security design decisions
@@ -221,7 +221,7 @@ Kopia's backup container runs as root. It needs to read appdata directories owne
 - [ ] Set explicit CPU/memory resource limits on all containers — also
       direct prep for Kubernetes `resources.requests/limits`
 - [ ] Alertmanager rules on top of the existing Prometheus/Grafana stack
-- [ ] Centralized logging (Loki + Promtail) alongside existing monitoring
+- [ ] Centralized logging (Loki + Grafana Alloy) alongside existing monitoring
 - [ ] Migrate homelab services to k3s, starting single-node on the
       existing host, then evaluating additional nodes
 - [x] ~~Molecule tests for Ansible roles~~ — deprioritized: most roles will
