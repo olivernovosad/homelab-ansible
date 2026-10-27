@@ -9,10 +9,6 @@ timezone: "Europe/Bratislava"
 # Network settings
 lan_subnet: "192.168.0.0/24"
 docker_subnet: "172.16.0.0/12"
-desktop_ssh_pubkey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIfnFT7ei0El3EbfGxNej7GvcpW95X06muO1L57XvxO+ anthropos@fedora"
-kopia_offsite_group: "kopia-offsite"
-kopia_offsite_user: "kopia-offsite"
-desktop_backup_host: "192.168.0.103" #It is a LAN IP. Showing local topology is not too dangerous but not tasteful. Will fix later.
 # Node-exporter textfile collector dir. Written to by system/kopia-snapshot.sh,
 # read by the monitoring role's node-exporter container.
 kopia_textfile_metrics_dir: "{{ appdata_path }}/node-exporter/textfile"

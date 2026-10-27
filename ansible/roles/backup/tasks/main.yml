@@ -3,7 +3,8 @@
 # This role owns the backup chain: Kopia (on-host, TLS-secured server), the
 # host-level cron trigger that replaces Kopia's unreliable internal
 # scheduler, and a Backblaze B2 offsite mirror synced nightly via Kopia's
-# own sync-to. No second local reader of the repository exists, so there is
+# own sync-to. The cron job runs ONE script, in order: consistent DB dumps ->
+# Kopia snapshots -> B2 mirror. No second local reader of the repository exists, so there is
 # no OS-level permission model to maintain here (a Raspberry Pi target may
 # be added later as a third copy — deferred for now).
 #
@@ -131,7 +132,35 @@
   changed_when: true
 
 # ===========================================================================
-# KOPIA - Host-level cron trigger (snapshot + B2 offsite sync, see script)
+# OFFSITE - Backblaze B2 credentials
+# `kopia repository sync-to s3` reads AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
+# from the environment. The backup script passes them with
+# `docker exec --env-file`, so the secret is never part of a command line
+# (command lines are world-readable via `ps aux`).
+# Kept in /etc, NOT under appdata: appdata is itself a Kopia snapshot source,
+# and a credentials file does not belong inside the backup it protects.
+# ===========================================================================
+- name: Create root-only directory for backup credentials
+  ansible.builtin.file:
+    path: /etc/kopia-backup
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+
+- name: Deploy Backblaze B2 credentials (env file for docker exec)
+  ansible.builtin.copy:
+    dest: /etc/kopia-backup/b2.env   # path is also referenced in kopia-snapshot.sh.j2
+    content: |
+      AWS_ACCESS_KEY_ID={{ vault_b2_key_id }}
+      AWS_SECRET_ACCESS_KEY={{ vault_b2_application_key }}
+    owner: root
+    group: root
+    mode: '0600'
+  no_log: true
+
+# ===========================================================================
+# KOPIA - Host-level cron trigger (DB dumps + snapshots + B2 sync, see script)
 # ===========================================================================
 - name: Deploy the Kopia snapshot trigger script
   ansible.builtin.template:
@@ -161,4 +190,6 @@
     minute: "0"
     hour: "2"
     user: root
-    job: "{{ appdata_path }}/kopia/kopia-snapshot.sh"
+    # flock -n: if a previous run is still going (e.g. a long first upload to
+    # B2), skip this one instead of running two backups on top of each other.
+    job: "flock -n /run/lock/kopia-backup.lock {{ appdata_path }}/kopia/kopia-snapshot.sh"

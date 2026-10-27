@@ -1,5 +1,21 @@
 #!/usr/bin/env bash
 # Managed by Ansible - DO NOT EDIT
+#
+# The whole nightly backup in one script, in a fixed order:
+#   1. prepare  - consistent dump of every database (plain files can be copied
+#                 while the app runs, a live database cannot)
+#   2. snapshot - Kopia snapshot of every source; the dumps live inside them
+#   3. offsite  - mirror the Kopia repository to Backblaze B2
+#
+# Why a host cron script instead of Kopia's built-in --snapshot-time policy:
+# in headless `kopia server` mode the internal scheduler stopped firing for
+# CLI-managed sources even though the server process stayed healthy.
+#
+# Design: best-effort, not fail-fast. Every step is attempted even if an
+# earlier one failed, so one broken step never silently skips the others.
+# The exit code is the number of failed steps; the same number goes into the
+# Prometheus metric below, so partial failures are visible, not just total ones.
+
 set -uo pipefail
 
 SOURCES=(
@@ -9,6 +25,21 @@ SOURCES=(
   "/nextcloud-config"
 )
 
+# --- prepare: databases ------------------------------------------------------
+DUMP_DIR="{{ nextcloud_db_dump_dir }}"      # host path; Kopia sees it as /nextcloud-db-dump
+NC_DB_USER="{{ nextcloud_db_user }}"
+NC_DB_NAME="{{ nextcloud_db_name }}"
+MIN_DUMP_BYTES=10240                        # a real dump is far bigger; catches empty/failed dumps
+VW_DIR="{{ appdata_path }}/vaultwarden"     # host path of Vaultwarden's /data
+
+# --- offsite: Backblaze B2 ---------------------------------------------------
+# Credentials come from an env file (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY,
+# which `kopia repository sync-to s3` reads itself) so they never appear on a
+# command line, where `ps aux` would show them. Deployed by the backup role.
+B2_ENV_FILE="/etc/kopia-backup/b2.env"
+B2_BUCKET="{{ vault_b2_bucket_name }}"
+B2_ENDPOINT="{{ vault_b2_endpoint }}"
+
 LOG_DIR="{{ appdata_path }}/kopia/logs"
 LOG_FILE="${LOG_DIR}/snapshot-$(date +%Y%m%d-%H%M%S).log"
 METRICS_DIR="{{ kopia_textfile_metrics_dir }}"
@@ -17,44 +48,88 @@ METRICS_TMP="${METRICS_FILE}.$$.tmp"
 
 mkdir -p "$LOG_DIR" "$METRICS_DIR"
 
-fail_count=0
-{
-  echo "=== Kopia snapshot run: $(date -Iseconds) ==="
-  for source in "${SOURCES[@]}"; do
-    echo "--- ${source} ---"
-    if docker exec kopia kopia snapshot create "${source}" --log-level=error; then
-      echo "${source}: OK"
-    else
-      echo "${source}: FAILED"
-      fail_count=$((fail_count + 1))
-    fi
-  done
-
-  echo "--- B2 offsite sync ---"
-  if docker exec kopia kopia repository sync-to s3 \
-      --bucket={{ vault_b2_bucket_name }} \
-      --endpoint={{ vault_b2_endpoint }} \
-      --access-key={{ vault_b2_key_id }} \
-      --secret-access-key={{ vault_b2_application_key }} \
-      --delete; then
-    echo "B2 offsite sync: OK"
+dump_nextcloud_db() {
+  local final tmp
+  final="${DUMP_DIR}/nextcloud-db-$(date +%Y%m%d).sql.gz"
+  tmp="${final}.tmp"
+  rm -f "${DUMP_DIR}"/*.sql.gz.tmp   # leftover from a run that was killed halfway
+  # Write to a temp file and move it into place only after it passed the checks:
+  # a failed dump must never replace (or age out) the last good one.
+  # pipefail makes the pipeline fail when pg_dump fails, not only when gzip does.
+  if docker exec nextcloud-db pg_dump -U "$NC_DB_USER" "$NC_DB_NAME" | gzip > "$tmp" \
+      && gzip -t "$tmp" \
+      && [[ "$(stat -c %s "$tmp")" -ge "$MIN_DUMP_BYTES" ]]; then
+    mv "$tmp" "$final"
+    find "$DUMP_DIR" -maxdepth 1 -name 'nextcloud-db-*.sql.gz' -mtime +7 -delete
   else
-    echo "B2 offsite sync: FAILED"
+    rm -f "$tmp"
+    return 1
+  fi
+}
+
+backup_vaultwarden() {
+  # Built-in backup (Vaultwarden 1.32.1+): writes a consistent copy of the
+  # SQLite DB next to db.sqlite3 (db_<timestamp>.sqlite3) and is safe while
+  # Vaultwarden is running. That directory is part of the /app-data snapshot.
+  docker exec vaultwarden /vaultwarden backup || return 1
+  # Verify that a fresh file really appeared - a silent no-op is exactly the
+  # failure this step exists to catch.
+  [[ -n "$(find "$VW_DIR" -maxdepth 1 -name 'db_*.sqlite3' -mmin -5)" ]] || return 1
+  find "$VW_DIR" -maxdepth 1 -name 'db_*.sqlite3' -mtime +7 -delete
+}
+
+fail_count=0
+step_count=0
+run_step() {
+  local name="$1"
+  shift
+  step_count=$((step_count + 1))
+  echo "--- ${name} ---"
+  if "$@"; then
+    echo "${name}: OK"
+  else
+    echo "${name}: FAILED"
     fail_count=$((fail_count + 1))
   fi
-
-  echo "=== Done: $((5 - fail_count))/5 steps OK ==="
-} >> "$LOG_FILE" 2>&1
+}
 
 {
-  echo "# HELP kopia_backup_last_run_timestamp_seconds Unix time of the last snapshot run attempt"
+  echo "=== Backup run: $(date -Iseconds) ==="
+
+  run_step "prepare: Nextcloud DB dump" dump_nextcloud_db
+  run_step "prepare: Vaultwarden DB backup" backup_vaultwarden
+
+  for source in "${SOURCES[@]}"; do
+    run_step "snapshot: ${source}" \
+      docker exec kopia kopia snapshot create "${source}" --log-level=error
+  done
+
+  # --delete: the B2 bucket mirrors the local repository exactly, including
+  # blobs removed by Kopia's own retention. It is a mirror, not a version history.
+  run_step "offsite: Backblaze B2 sync" \
+    docker exec --env-file "$B2_ENV_FILE" kopia \
+    kopia repository sync-to s3 --bucket="$B2_BUCKET" --endpoint="$B2_ENDPOINT" --delete
+
+  echo "=== Done: $((step_count - fail_count))/${step_count} steps OK ==="
+} >> "$LOG_FILE" 2>&1
+
+# Prometheus textfile collector output - picked up by node-exporter, scraped
+# by the existing Prometheus instance, visible in Grafana like any other metric.
+{
+  echo "# HELP kopia_backup_last_run_timestamp_seconds Unix time of the last backup run attempt"
   echo "# TYPE kopia_backup_last_run_timestamp_seconds gauge"
   echo "kopia_backup_last_run_timestamp_seconds $(date +%s)"
-  echo "# HELP kopia_backup_last_run_failures Number of failed steps (sources + B2 sync) in the last run"
+  echo "# HELP kopia_backup_last_run_failures Number of steps (dump, snapshot, offsite) that failed in the last run"
   echo "# TYPE kopia_backup_last_run_failures gauge"
   echo "kopia_backup_last_run_failures ${fail_count}"
+  echo "# HELP kopia_backup_steps_total Number of steps attempted in the last run"
+  echo "# TYPE kopia_backup_steps_total gauge"
+  echo "kopia_backup_steps_total ${step_count}"
 } > "$METRICS_TMP"
 mv "$METRICS_TMP" "$METRICS_FILE"
 
+# Keep 14 days of run logs locally; Kopia's own history/retention covers the
+# actual backup data, this is just operational log noise.
 find "$LOG_DIR" -name '*.log' -mtime +14 -delete
+
 exit "$fail_count"
