@@ -4,12 +4,21 @@
   become: true
 
   roles:
-    - { role: bootstrap,   tags: bootstrap }    # OS hardening, UFW, sysctl, Docker Engine
-    - { role: system,      tags: system }       # CrowdSec, automatic OS updates
-    - { role: connection,  tags: connection }   # Nginx Proxy Manager, Cloudflare Tunnel
-    - { role: vaultwarden, tags: vaultwarden }  # Password manager
-    - { role: nextcloud,   tags: nextcloud }    # Nextcloud (Postgres, Redis, cron, Collabora)
-    - { role: media,       tags: media }        # Jellyfin, torrents, Gluetun VPN, *arr stack
-    - { role: monitoring,  tags: monitoring }   # Grafana, Prometheus, Node Exporter, cAdvisor
-    - { role: foundry,     tags: foundry }      # Foundry VTT
-    - { role: backup,      tags: backup }       # Kopia, nightly script, Backblaze B2
+    - role: bootstrap        # OS hardening, UFW, sysctl, Docker Engine
+      tags: bootstrap
+    - role: system           # CrowdSec, automatic OS updates
+      tags: system
+    - role: connection       # Nginx Proxy Manager, Cloudflare Tunnel
+      tags: connection
+    - role: vaultwarden      # Password manager
+      tags: vaultwarden
+    - role: nextcloud        # Nextcloud (Postgres, Redis, cron, Collabora)
+      tags: nextcloud
+    - role: media            # Jellyfin, torrents, Gluetun VPN, *arr stack
+      tags: media
+    - role: monitoring       # Grafana, Prometheus, Node Exporter, cAdvisor
+      tags: monitoring
+    - role: foundry          # Foundry VTT
+      tags: foundry
+    - role: backup           # Kopia, nightly script, Backblaze B2
+      tags: backup
