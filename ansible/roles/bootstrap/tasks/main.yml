@@ -90,7 +90,7 @@
 # ===========================================================================
 - name: Apply secure SSH configuration (drop-in file)
   ansible.builtin.copy:
-    dest: /etc/ssh/sshd_config.d/99-hardening.conf
+    dest: /etc/ssh/sshd_config.d/00-hardening.conf
     content: |
       PermitRootLogin no
       PasswordAuthentication no
