@@ -26,7 +26,6 @@
     published_ports:
       - "127.0.0.1:8880:80"
     env:
-      WEBSOCKET_ENABLED: "true"
       SIGNUPS_ALLOWED: "false"
     volumes:
       - "{{ appdata_path }}/vaultwarden:/data"

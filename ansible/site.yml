@@ -4,12 +4,12 @@
   become: true
 
   roles:
-    - bootstrap        # OS hardening, UFW, sysctl, Docker Engine
-    - system           # Watchtower, CrowdSec, Autoheal, Kopia backups
-    - connection       # Nginx Proxy Manager, Cloudflare Tunnel
-    - vaultwarden      # Password manager
-    - nextcloud        # Nextcloud AIO
-    - media            # Jellyfin, torrents, Gluetun VPN, *arr stack
-    - monitoring       # Grafana, Prometheus, Node Exporter, cAdvisor
-    - foundry          # Foundry VTT
-    - backup
+    - { role: bootstrap,   tags: bootstrap }    # OS hardening, UFW, sysctl, Docker Engine
+    - { role: system,      tags: system }       # CrowdSec, automatic OS updates
+    - { role: connection,  tags: connection }   # Nginx Proxy Manager, Cloudflare Tunnel
+    - { role: vaultwarden, tags: vaultwarden }  # Password manager
+    - { role: nextcloud,   tags: nextcloud }    # Nextcloud (Postgres, Redis, cron, Collabora)
+    - { role: media,       tags: media }        # Jellyfin, torrents, Gluetun VPN, *arr stack
+    - { role: monitoring,  tags: monitoring }   # Grafana, Prometheus, Node Exporter, cAdvisor
+    - { role: foundry,     tags: foundry }      # Foundry VTT
+    - { role: backup,      tags: backup }       # Kopia, nightly script, Backblaze B2

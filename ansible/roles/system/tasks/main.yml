@@ -1,6 +1,6 @@
 ---
 # ===========================================================================
-# File prep for apps and docker proxy for security of Watchtower and Autoheal
+# File prep for Crowdsec and the monitoring network
 # ===========================================================================
 - name: Create directories for apps
   ansible.builtin.file:
@@ -10,37 +10,11 @@
   loop:
     - "{{ appdata_path }}/crowdsec/config"
     - "{{ appdata_path }}/crowdsec/data"
-    - "{{ appdata_path }}/kopia/config"
-    - "{{ appdata_path }}/kopia/cache"
-    - "/opt/docker/compose-stacks"
 
 - name: Ensure monitoring network exists
   community.docker.docker_network:
     name: monitoring
     state: present
-
-- name: Deploy Docker Socket Proxy container
-  community.docker.docker_container:
-    name: docker-proxy
-    image: tecnativa/docker-socket-proxy:latest
-    state: started
-    restart_policy: unless-stopped
-    env:
-      POST: "0"
-      BUILD: "0"
-      EXEC: "0"
-      DELETE: "0"
-      CONTAINERS: "1"
-      IMAGES: "1"
-      INFO: "1"
-      NETWORKS: "1"
-      SERVICES: "1"
-      TASKS: "1"
-      VOLUMES: "1"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    networks:
-      - name: monitoring
 
 # ===========================================================================
 # CROWDSEC - Digital bouncer
@@ -58,24 +32,6 @@
       - "{{ appdata_path }}/crowdsec/data:/var/lib/crowdsec/data"
       - /var/log:/var/log:ro
       - "{{ appdata_path }}/npm/logs:/logs/npm:ro"
-
-# ===========================================================================
-# WATCHTOWER - Auto update of containers
-# ===========================================================================
-- name: Deploy Watchtower container
-  community.docker.docker_container:
-    name: watchtower
-    image: containrrr/watchtower:latest
-    state: started
-    restart_policy: unless-stopped
-    env:
-      DOCKER_HOST: "tcp://docker-proxy:2375"
-      WATCHTOWER_CLEANUP: "true"
-      DOCKER_API_VERSION: "1.52"
-      WATCHTOWER_STARTUP_DELAY: "0"
-      TZ: "{{ timezone }}"
-    networks:
-      - name: monitoring
 
 # ===========================================================================
 # Automatic system maintenance and security updates
