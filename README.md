@@ -67,7 +67,7 @@ Traffic is split by trust boundary into isolated Docker networks:
 | Network | Purpose |
 |---|---|
 | `proxy_net` | Public-facing services routed through Nginx Proxy Manager |
-| `tunnel_net` | Internal services published via Cloudflare Tunnel (no open inbound ports) |
+| `tunnel_net` | Services published via Cloudflare Tunnel (outbound-only connection, no router port needed) |
 | `media_net` | Media server ↔ media request/management apps |
 | `torrent_net` | Download stack — **all traffic forced through the Gluetun VPN container**, no direct internet path |
 | `monitoring` | Metrics collection, isolated from application traffic |
@@ -77,31 +77,30 @@ Traffic is split by trust boundary into isolated Docker networks:
 Rather than list every tool, here's the *reasoning* behind the choices that matter most on review:
 
 - **No secrets in plaintext.** All sensitive values live in `ansible-vault`-encrypted `vault.yml`; the vault password is resolved via `get-vault-pass.sh` (env var in CI, OS keyring locally) — same script, both environments.
-- **Docker socket is never mounted directly.** Watchtower talks to a `tecnativa/docker-socket-proxy` container with a locked-down permission set (no `POST`, `BUILD`, `EXEC`, `DELETE`) instead of `/var/run/docker.sock`. cAdvisor runs privileged with direct docker.sock/cgroup access, per the upstream-recommended deployment — its metrics model requires this and isn't compatible with the read-only docker-socket-proxy pattern used elsewhere. It's isolated on the monitoring network with no other services depending on that access.
+- **No container controls the Docker daemon.** The only container with Docker socket / cgroup access is cAdvisor, which runs privileged as the upstream deployment requires, isolated on the `monitoring` network. I previously ran Watchtower behind a `docker-socket-proxy`, but removed both: the proxy blocked every write call, so Watchtower could not update anything. A component that looks like protection but does nothing is worse than none, so updates are now done deliberately through Ansible.
 - **VPN kill-switch for torrent traffic.** qBittorrent shares Gluetun's network namespace (`network_mode: container:gluetun`) — if the VPN drops, the download client loses connectivity entirely rather than falling back to the host's real IP.
 - **Admin UIs bound to loopback.** Nginx Proxy Manager's admin panel, Kopia's web UI, and the `*arr` dashboards are published on `127.0.0.1` only, not the LAN interface.
 - **Host hardening.** UFW default-deny inbound, SSH restricted to key-based auth with `PermitRootLogin no`, kernel `sysctl` hardening (SYN cookies, disabled ICMP redirects).
-- **CrowdSec** ingests Nginx/system logs and blocks malicious request patterns in near real time.
+- **CrowdSec (detection only).** The engine reads Nginx and system logs and flags malicious patterns, but no firewall bouncer is deployed yet, so nothing is blocked automatically. Adding a bouncer is on the roadmap.
 
 ## Backup & Disaster Recovery
 
-Backups follow a 3-2-1 strategy:
+Backups follow a 3-2-1 idea: the data, a second local copy and an offsite copy. A third copy on a Raspberry Pi is planned.
 
-1. **Primary**: Kopia takes nightly snapshots (app-data, Nextcloud files, a
-   logical `pg_dump` of the Nextcloud database, and compose stacks) to a
-   second physical disk on the homelab host.
-2. **Offsite copy**: A dedicated, read-only `backuppull` account (SSH key
-   restricted via `rrsync`, forced command, no shell access) lets a
-   separate desktop machine pull the Kopia repository hourly via a
-   systemd user timer — regardless of whether the desktop is on 24/7.
-3. **Cold copy**: A manual script mirrors the desktop copy to an external
-   drive, kept as an air-gapped last resort.
+One host cron job (02:00, wrapped in `flock` so runs never overlap) runs a single script from the `backup` role. The steps run in a fixed order:
 
-The Nextcloud database is dumped logically (`pg_dump`) before each backup
-run rather than copying the live Postgres data directory, to guarantee a
-consistent, restorable snapshot.
+1. **Consistent database dumps.** Nextcloud: `pg_dump | gzip` into a temp file, checked (`gzip -t`, minimum size) before it replaces the last good dump. Vaultwarden: its built-in `backup` command, because a plain copy of a live SQLite file with a write-ahead log can be inconsistent.
+2. **Kopia snapshots** (encrypted, deduplicated) of app data, Nextcloud files, config and the dumps, to a repository on a second physical disk.
+3. **Offsite mirror** of the Kopia repository to Backblaze B2 with `kopia repository sync-to`. B2 credentials are passed through a root-only env file, never on a command line.
 
-Snapshot creation is triggered by a host-level cron job rather than Kopia's built-in scheduler, which proved unreliable for CLI-managed sources in headless mode; each run reports a Prometheus metric consumed by the existing Grafana stack.
+Every step is attempted even if an earlier one fails. The exit code and a Prometheus metric (`kopia_backup_last_run_failures`) show how many steps failed, so a partial failure is visible in Grafana.
+
+**Restore is tested, not assumed.** I restored Vaultwarden from a snapshot into a throwaway container (login works, all entries present, ~30 min including debugging) and the Nextcloud database into a disposable Postgres (row counts match production, ~11 min). Foundry and a full Nextcloud files restore are not yet drilled.
+
+**Known limitations:** `--delete` makes B2 a mirror, not a version history (a mistake propagates unless local snapshots still hold the data); the Kopia admin password is visible in the container's arguments; Cloudflare Tunnel ingress rules exist only in the Cloudflare dashboard and are not yet in code.
+
+The trigger is a host cron job rather than Kopia's built-in scheduler, which proved unreliable for CLI-managed sources in headless mode.
+
 ## Tech stack
 
 | Layer | Tools |
@@ -111,8 +110,8 @@ Snapshot creation is triggered by a host-level cron job rather than Kopia's buil
 | Containers | Docker, Docker Compose |
 | Reverse proxy / ingress | Nginx Proxy Manager, Cloudflare Tunnel |
 | Monitoring | Prometheus, Grafana, Node Exporter, cAdvisor |
-| Security | UFW, CrowdSec, Docker Socket Proxy, Gitleaks, Trivy |
-| Backup | rsync, systemd timers |
+| Security | UFW, CrowdSec, Gitleaks, Trivy |
+| Backup | Kopia, Backblaze B2, cron |
 | CI/CD | GitHub Actions |
 
 ## Repository structure
@@ -121,7 +120,9 @@ Snapshot creation is triggered by a host-level cron job rather than Kopia's buil
 .
 ├── ansible/
 │   ├── ansible.cfg
-│   ├── site.yml                  # Main playbook
+│   ├── site.yml                  # Main playbook (one tag per role)
+│   ├── aktualizacia.yml          # OS updates with controlled reboot
+│   ├── restore-verify.yml        # Restore verification drill
 │   ├── get-vault-pass.sh         # Resolves vault password (CI env var / local keyring)
 │   ├── group_vars/
 │   │   ├── all/vars.yml          # Shared variables
@@ -131,13 +132,14 @@ Snapshot creation is triggered by a host-level cron job rather than Kopia's buil
 │   │   └── prod.ini.example      # Template — real inventory kept out of git
 │   └── roles/
 │       ├── bootstrap/            # OS hardening, UFW, sysctl, Docker Engine
-│       ├── system/                # Watchtower, CrowdSec, Kopia backups, docker-proxy
-│       ├── connection/            # Nginx Proxy Manager, Cloudflare Tunnel
+│       ├── system/               # CrowdSec, unattended upgrades
+│       ├── connection/           # Nginx Proxy Manager, Cloudflare Tunnel
 │       ├── vaultwarden/
 │       ├── nextcloud/
-│       ├── media/                 # Jellyfin, *arr stack, Gluetun VPN, qBittorrent
-│       ├── monitoring/            # Prometheus, Grafana, exporters
-│       └── foundry/                # Foundry VTT
+│       ├── media/                # Jellyfin, *arr stack, Gluetun VPN, qBittorrent
+│       ├── monitoring/           # Prometheus, Grafana, exporters
+│       ├── foundry/              # Foundry VTT
+│       └── backup/               # Kopia, nightly script, B2 mirror
 ├── terraform/dev/                # Disposable KVM staging VM for pre-prod testing
 └── .github/workflows/            # Lint, syntax check, secret scan, config scan, terraform CI
 ```
@@ -162,14 +164,31 @@ Changes aren't applied directly to the production host. `terraform/dev` provisio
 cd terraform/dev
 terraform apply                 # spins up a disposable staging VM, writes ansible/inventories/dev.ini
 cd ../../ansible
-ansible-playbook site.yml -i inventories/dev.ini --ask-vault-pass
+ansible-playbook site.yml       # default inventory is dev.ini, default target is the staging group
 ```
 
-Once verified, the identical playbook targets production:
+The default is deliberately the disposable VM, so a forgotten flag can never touch production. Production has to be chosen explicitly (inventory and host group):
 
 ```bash
-ansible-playbook site.yml -i inventories/prod.ini --ask-vault-pass --limit homelab
+ansible-playbook -i inventories/prod.ini -e target_hosts=homelab site.yml --check --diff   # dry run
+ansible-playbook -i inventories/prod.ini -e target_hosts=homelab site.yml                  # apply
 ```
+
+### Running a single role
+
+Every role has a tag with the same name, so one component can be applied without touching the rest:
+
+```bash
+ansible-playbook site.yml --list-tags                       # available tags
+ansible-playbook -i inventories/prod.ini -e target_hosts=homelab site.yml --tags backup --list-tasks   # what would run
+ansible-playbook -i inventories/prod.ini -e target_hosts=homelab site.yml --tags backup --check --diff # dry run
+ansible-playbook -i inventories/prod.ini -e target_hosts=homelab site.yml --tags "monitoring,backup"   # several roles
+ansible-playbook -i inventories/prod.ini -e target_hosts=homelab site.yml --skip-tags media            # everything except one
+```
+
+Tags: `bootstrap`, `system`, `connection`, `vaultwarden`, `nextcloud`, `media`, `monitoring`, `foundry`, `backup`.
+
+Two more playbooks live next to `site.yml`: `aktualizacia.yml` (OS package updates with a controlled reboot) and `restore-verify.yml` (restore verification drill).
 
 ## Getting started
 
@@ -179,13 +198,15 @@ ansible-playbook site.yml -i inventories/prod.ini --ask-vault-pass --limit homel
 ansible-galaxy collection install community.docker community.general
 ```
 
-Copy `ansible/inventories/prod.ini.example` to `prod.ini` and fill in your own hosts, then run as shown above. A vault password is required — either export `ANSIBLE_VAULT_PASSWORD` or store it in your OS keyring (see `get-vault-pass.sh`).
+Copy `ansible/inventories/prod.ini.example` to `prod.ini` and fill in your own hosts, then run as shown above. The vault password is read automatically by `get-vault-pass.sh` (configured in `ansible.cfg`), so no `--ask-vault-pass` is needed. Either export `ANSIBLE_VAULT_PASSWORD` or store it once in the OS keyring: `secret-tool store --label="Ansible vault" ansible vault`.
 
 ## Lessons learned / trade-offs
 
 A few decisions here are trade-offs I made consciously, not things I overlooked:
 
-Most images run on `:latest` with Watchtower auto-updating them. That's convenient for a single-operator homelab, but I'm aware it's non-reproducible — a container can pull a breaking change overnight with no warning. In a team/production setting I'd pin versions and roll out updates deliberately instead of letting them apply themselves.
+Most images run on `:latest`. That is convenient for a single operator but non-reproducible: a `docker pull` can bring a breaking change. I once had Watchtower for this, then found out (logs full of 403s) that its socket proxy blocked all writes, so it never updated anything; I removed it. Updates are now manual and deliberate via Ansible, and in a team setting I would pin versions and roll out changes through review.
+
+SSH hardening was silently ineffective: `50-cloud-init.conf` set `PasswordAuthentication yes` and, since sshd uses the first value it reads, overrode my `99-hardening.conf`. I found it with `sshd -T` and renamed my file to `00-`. Lesson: verify the effective configuration, not the file you wrote.
 
 Terraform state is kept local, with no remote backend or locking. That's fine as long as I'm the only one touching this infrastructure, but it wouldn't hold up with more than one contributor — I'd move to a remote backend (S3 + DynamoDB lock, or Terraform Cloud) the moment that changed.
 
@@ -193,8 +214,10 @@ Kopia's backup container runs as root. It needs to read appdata directories owne
 
 ## Roadmap
 
-- [ ] Validate backups with a real restore drill (Kopia snapshot → fresh
-      restore of Vaultwarden, Foundry, and Nextcloud)
+- [x] Restore drill for Vaultwarden and the Nextcloud database
+- [ ] Restore drill for Foundry and the full Nextcloud files
+- [ ] Deploy a CrowdSec firewall bouncer so detections are actually blocked
+- [ ] Build a dedicated TrueNAS storage server and use it as the storage backend for the k3s migration (Nextcloud data currently lives in a Docker volume on the SSD)
 - [ ] Set explicit CPU/memory resource limits on all containers — also
       direct prep for Kubernetes `resources.requests/limits`
 - [ ] Alertmanager rules on top of the existing Prometheus/Grafana stack
