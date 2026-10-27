@@ -9,7 +9,7 @@ timezone: "Europe/Bratislava"
 # Network settings
 lan_subnet: "192.168.0.0/24"
 docker_subnet: "172.16.0.0/12"
-# Node-exporter textfile collector dir. Written to by system/kopia-snapshot.sh,
+# Node-exporter textfile collector dir. Written to by backup/kopia-snapshot.sh and restore_verify,
 # read by the monitoring role's node-exporter container.
 kopia_textfile_metrics_dir: "{{ appdata_path }}/node-exporter/textfile"
 # System packages for bootstrap

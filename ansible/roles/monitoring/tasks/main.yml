@@ -26,7 +26,7 @@
     path: "{{ kopia_textfile_metrics_dir }}"
     state: directory
     mode: '0755'
-  # Written to by the system role's kopia-snapshot.sh cron job; read here by
+  # Written to by the backup role's kopia-snapshot.sh and by restore_verify; read here by
   # node-exporter so backup success/failure shows up as a normal Prometheus
   # metric (kopia_backup_last_run_*) next to everything else in Grafana.
 
